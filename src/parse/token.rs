@@ -74,8 +74,12 @@ impl Display for Token {
                 write!(
                     f,
                     "|{}.{}|",
-                    lower.map(|num| num.to_string()).unwrap_or_else(|| "".to_owned()),
-                    upper.map(|num| num.to_string()).unwrap_or_else(|| "".to_owned())
+                    lower
+                        .map(|num| num.to_string())
+                        .unwrap_or_else(|| "".to_owned()),
+                    upper
+                        .map(|num| num.to_string())
+                        .unwrap_or_else(|| "".to_owned())
                 )
             }
         }
