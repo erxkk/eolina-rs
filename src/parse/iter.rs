@@ -7,9 +7,7 @@ use std::rc::Rc;
 ///
 /// Use [`Iterator::collect::<Result<C, _>>()`] to collect into a `C`.
 ///
-
-// not copy because iters usually aren't, not clone because after mutation it's malformed if cloned
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct TokenIter {
     input: Rc<String>,
     index: usize,
@@ -29,7 +27,7 @@ impl TokenIter {
     }
 
     ///
-    /// Returns whether this iterator has previously yielded a [`Err`] value.
+    /// Returns whether this iterator has previously yielded an [`Err`].
     ///
     pub fn error(&self) -> bool {
         self.error
@@ -70,16 +68,18 @@ mod test {
     #[test]
     fn token_iter() {
         let stream = TokenIter::new("<>/|.|".to_owned().into());
-        let tokens = stream.collect::<Result<Vec<_>, _>>();
+        let tokens = stream
+            .collect::<Result<Vec<_>, _>>()
+            .expect("the given tokens are valid");
 
         assert_eq!(
             tokens,
-            Ok(vec![
+            vec![
                 Token::In,
                 Token::Out,
                 Token::Split,
                 Token::Slice(None, None)
-            ])
+            ]
         );
     }
 
@@ -88,7 +88,7 @@ mod test {
         let stream = TokenIter::new("<>/|.".to_owned().into());
         stream
             .collect::<Result<Vec<_>, _>>()
-            .expect_err("`|.` should not be known");
+            .expect_err("`|.` is invalid");
 
         let mut stream = TokenIter::new("|.".to_owned().into());
         stream.next();

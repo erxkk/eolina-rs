@@ -2,6 +2,20 @@ use super::{Error, Value, ValueKind};
 use crate::helper::AsciiCheckExt;
 use crate::parse::FilterToken;
 
+///
+/// Splits the given input into it's [`char`]s.
+///
+/// ### Accepts
+///
+/// * [`ValueKind::String`]
+///
+/// ### Returns
+///
+/// * [`Ok(Value::StringVec(vec))`]
+///   * `vec` contains the input's [`char`]s, each as a separate [`String`]
+/// * [`Err(error)`]
+///   * `error` contains an arg type mismatch [`Error`]
+///
 pub fn split(input: Value) -> Result<Value, Error> {
     Ok(Value::StringVec(
         input
@@ -12,12 +26,41 @@ pub fn split(input: Value) -> Result<Value, Error> {
     ))
 }
 
+///
+/// Joins the given input into one [`String`].
+///
+/// ### Accepts
+///
+/// * [`ValueKind::StringVec`]
+///
+/// ### Returns
+///
+/// * [`Ok(Value::String(string))`]
+///   * `string` contains the input's [`char`]s, each as a separate [`String`]
+/// * [`Err(error)`]
+///   * `error` contains an arg type mismatch [`Error`]
+///
 pub fn join(input: Value) -> Result<Value, Error> {
     Ok(Value::String(
         input.unwrap_string_vec()?.into_iter().collect::<String>(),
     ))
 }
 
+///
+/// Concatenates the given inputs into one of the same type.
+///
+/// ### Accepts
+///
+/// * [`ValueKind::String`]
+/// * [`ValueKind::StringVec`]
+///
+/// ### Returns
+///
+/// * [`Ok(stringOrVec)`]
+///   * `stringOrVec` contains concatenated input
+/// * [`Err(error)`]
+///   * `error` contains an arg type mismatch or type mismatch [`Error`]
+///
 pub fn concat(input1: Value, input2: Value) -> Result<Value, Error> {
     match (input1, input2) {
         (Value::String(mut string1), Value::String(string2)) => Ok(Value::String({
@@ -40,15 +83,45 @@ pub fn concat(input1: Value, input2: Value) -> Result<Value, Error> {
     }
 }
 
+///
+/// Converts each element in the given input to it's uppercase representation.
+///
+/// ### Accepts
+///
+/// * [`ValueKind::String`]
+/// * [`ValueKind::StringVec`]
+///
+/// ### Returns
+///
+/// * [`Ok(stringOrVec)`]
+///   * `stringOrVec` contains uppercased input
+/// * [`Err(error)`]
+///   * `error` contains an arg type mismatch [`Error`]
+///
 pub fn to_upper(input: Value) -> Result<Value, Error> {
     __to(input, |s| s.to_upper())
 }
 
+///
+/// Converts each element in the given input to it's lowercase representation.
+///
+/// ### Accepts
+///
+/// * [`ValueKind::String`]
+/// * [`ValueKind::StringVec`]
+///
+/// ### Returns
+///
+/// * [`Ok(stringOrVec)`]
+///   * `stringOrVec` contains lowercased input
+/// * [`Err(error)`]
+///   * `error` contains an arg type mismatch [`Error`]
+///
 pub fn to_lower(input: Value) -> Result<Value, Error> {
     __to(input, |s| s.to_lower())
 }
 
-pub fn __to(input: Value, converter: impl Fn(&String) -> String) -> Result<Value, Error> {
+fn __to(input: Value, converter: impl Fn(&String) -> String) -> Result<Value, Error> {
     match input {
         Value::String(string) => Ok(Value::String(converter(&string))),
         Value::StringVec(vec) => Ok(Value::StringVec(
@@ -61,18 +134,78 @@ pub fn __to(input: Value, converter: impl Fn(&String) -> String) -> Result<Value
     }
 }
 
+///
+/// Returns whether or not each element in the given input is a consonant or contains itself only consonants.
+///
+/// ### Accepts
+///
+/// * [`ValueKind::String`]
+/// * [`ValueKind::StringVec`]
+///
+/// ### Returns
+///
+/// * [`Ok(Value::Bool(value))`]
+///   * `value` contains whether or not the check succeeded
+/// * [`Err(error)`]
+///   * `error` contains an arg type mismatch [`Error`]
+///
 pub fn is_conso(input: Value) -> Result<Value, Error> {
     __check_all(input, |s| s.is_conso())
 }
 
+///
+/// Returns whether or not each element in the given input is a consonant or contains itself only vowel.
+///
+/// ### Accepts
+///
+/// * [`ValueKind::String`]
+/// * [`ValueKind::StringVec`]
+///
+/// ### Returns
+///
+/// * [`Ok(Value::Bool(value))`]
+///   * `value` contains whether or not the check succeeded
+/// * [`Err(error)`]
+///   * `error` contains an arg type mismatch [`Error`]
+///
 pub fn is_vowel(input: Value) -> Result<Value, Error> {
     __check_all(input, |s| s.is_vowel())
 }
 
+///
+/// Returns whether or not each element in the given input is a uppercase.
+///
+/// ### Accepts
+///
+/// * [`ValueKind::String`]
+/// * [`ValueKind::StringVec`]
+///
+/// ### Returns
+///
+/// * [`Ok(Value::Bool(value))`]
+///   * `value` contains whether or not the check succeeded
+/// * [`Err(error)`]
+///   * `error` contains an arg type mismatch [`Error`]
+///
 pub fn is_upper(input: Value) -> Result<Value, Error> {
     __check_all(input, |s| s.is_upper())
 }
 
+///
+/// Returns whether or not each element in the given input is a lowercase.
+///
+/// ### Accepts
+///
+/// * [`ValueKind::String`]
+/// * [`ValueKind::StringVec`]
+///
+/// ### Returns
+///
+/// * [`Ok(Value::Bool(value))`]
+///   * `value` contains whether or not the check succeeded
+/// * [`Err(error)`]
+///   * `error` contains an arg type mismatch [`Error`]
+///
 pub fn is_lower(input: Value) -> Result<Value, Error> {
     __check_all(input, |s| s.is_lower())
 }
@@ -88,6 +221,21 @@ fn __check_all(input: Value, check: impl Fn(&String) -> bool) -> Result<Value, E
     }
 }
 
+///
+/// Filters out each element in the given input that does not pass a given check.
+///
+/// ### Accepts
+///
+/// * [`ValueKind::String`]
+/// * [`ValueKind::StringVec`]
+///
+/// ### Returns
+///
+/// * [`Ok(stringOrVec)`]
+///   * `stringOrVec` contains the filtered input
+/// * [`Err(error)`]
+///   * `error` contains an arg type mismatch [`Error`]
+///
 pub fn filter(input: Value, check: FilterToken) -> Result<Value, Error> {
     match input {
         Value::String(string) => Ok(Value::String(
@@ -117,6 +265,21 @@ fn __filter<T: AsciiCheckExt>(val: &T, check: FilterToken) -> bool {
     }
 }
 
+///
+/// Slices the given input at the lower and upper bounds.
+///
+/// ### Accepts
+///
+/// * [`ValueKind::String`]
+/// * [`ValueKind::StringVec`]
+///
+/// ### Returns
+///
+/// * [`Ok(stringOrVec)`]
+///   * `stringOrVec` contains the subslice of the input
+/// * [`Err(error)`]
+///   * `error` contains an arg type mismatch [`Error`]
+///
 pub fn slice(input: Value, lower: Option<usize>, upper: Option<usize>) -> Result<Value, Error> {
     match input {
         Value::String(string) => Ok(Value::String(match (lower, upper) {

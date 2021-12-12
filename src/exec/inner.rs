@@ -7,15 +7,13 @@ use std::{
 };
 
 ///
-/// Lazily yields tokens from a `&'a str` and interprets them
+/// Lazily yields tokens from a given input and interprets them
 ///
 #[derive(Debug)]
 pub struct Executor {
     input: Rc<String>,
     values: VecDeque<Value>,
     tokens: TokenIter,
-    stdin: io::Stdin,
-    stdout: io::Stdout,
 }
 
 impl Executor {
@@ -28,8 +26,6 @@ impl Executor {
             input,
             values: VecDeque::new(),
             tokens: TokenIter::new(clone),
-            stdin: io::stdin(),
-            stdout: io::stdout(),
         }
     }
 
@@ -48,17 +44,40 @@ impl Executor {
     }
 
     ///
-    /// Resets this executor, flushing it's output and clears it's values.
+    /// Returns if this executor encountered an error.
     ///
-    pub fn reset(&mut self) -> Result<(), io::Error> {
-        self.tokens = TokenIter::new(Rc::clone(&self.input));
-        self.values.clear();
-        self.stdout.flush()?;
-        Ok(())
+    pub fn error(&self) -> bool {
+        self.tokens.error()
+    }
+
+    ///
+    /// Resets this executor, resetting it's instruction iterator clears it's values.
+    ///
+    /// ### Returns
+    ///
+    /// * [`Ok(())`] if the executor could be reset
+    /// * [`Err(str)`] if the executor could not be reset
+    ///   * `str` contains the error reason
+    ///
+    pub fn reset(&mut self) -> Result<(), String> {
+        if self.tokens.error() {
+            Err(format!("the program must be malformed `{}`", self.input))
+        } else {
+            self.tokens = TokenIter::new(Rc::clone(&self.input));
+            self.values.clear();
+            Ok(())
+        }
     }
 
     ///
     /// Pops the front of the queue or returns a empty queue error.
+    ///
+    /// ### Returns
+    ///
+    /// * [`Ok(value)`] if there was a value to pop
+    ///   * `value` will contain the value fromt he head of the queue
+    /// * [`Err(error)`] if there was no value in the queue
+    ///   * `error` will contain an error of kind `EmptyQueue`
     ///
     fn pop_queue(&mut self) -> Result<Value, Error> {
         self.values.pop_front().ok_or_else(Error::empty)
@@ -71,14 +90,15 @@ impl Executor {
         match token {
             Token::In => {
                 let mut val = String::new();
-                write!(self.stdout, " in: ")?;
-                self.stdout.flush()?;
-                self.stdin.read_line(&mut val)?;
+                print!(" in: ");
+                io::stdout().flush()?;
+
+                io::stdin().read_line(&mut val)?;
                 self.values.push_back(Value::String(val));
             }
             Token::Out => {
                 let val = self.pop_queue()?;
-                writeln!(self.stdout, "out: {}", val)?;
+                println!("out: {}", val);
             }
             Token::Rotate => {
                 self.values.rotate_left(1);
@@ -152,7 +172,19 @@ impl Executor {
 
 impl Iterator for Executor {
     type Item = Result<(), Error>;
+    ///
+    /// Advances this executor to the next instruction and attempts executing it.
+    ///
+    /// ### Returns
+    ///
+    /// * [`Some(Ok(()))`] if the current instruction could be executed
+    /// * [`Some(Err(error))`] if the next instruction is invalid or could not be executed
+    ///   * `error` contains the [`Error`] that occured during execution
+    /// * [`None`] if the previous result was an [`Error`] or the all instructions were executed
+    ///   * `self::error` returns whether or not an error was encountered before
+    ///
 
+    // TODO: use a generator here at some point
     fn next(&mut self) -> Option<Self::Item> {
         if self.tokens.error() {
             None

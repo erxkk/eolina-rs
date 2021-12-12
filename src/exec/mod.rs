@@ -1,6 +1,6 @@
 //!
 //! Contains functionailty and data structures related to execution
-//! of a eolina program.
+//! of a program.
 //!
 
 mod err;

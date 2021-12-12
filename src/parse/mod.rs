@@ -1,5 +1,5 @@
 //!
-//! Contains utility to parse eolina tokens lazily.
+//! Contains utility to parse tokens.
 //!
 
 mod iter;

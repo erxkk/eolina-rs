@@ -5,7 +5,7 @@ use nom::{
     character::complete::digit0,
     error::Error as NomError,
     sequence::{delimited, separated_pair},
-    Err,
+    Err as NomErr,
 };
 use std::fmt::Display;
 
@@ -14,19 +14,34 @@ use std::fmt::Display;
 ///
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Filter {
+    ///
+    /// The vowel filter `v`.
+    ///
     Vowel,
+
+    ///
+    /// The vowel filter `c`.
+    ///
     Conso,
+
+    ///
+    /// The uppercase filter `u`.
+    ///
     Upper,
+
+    ///
+    /// The lowercase filter `l`.
+    ///
     Lower,
 }
 
 impl Display for Filter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Vowel => f.write_str("v"),
-            Self::Conso => f.write_str("c"),
-            Self::Upper => f.write_str("^"),
-            Self::Lower => f.write_str("_"),
+            Self::Vowel => f.write_str("[v]"),
+            Self::Conso => f.write_str("[c]"),
+            Self::Upper => f.write_str("[^]"),
+            Self::Lower => f.write_str("[_]"),
         }
     }
 }
@@ -36,20 +51,79 @@ impl Display for Filter {
 ///
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Token {
+    ///
+    /// The input token `<`.
+    ///
     In,
+
+    ///
+    /// The output token `>`.
+    ///
     Out,
+
+    ///
+    /// The split token `/`.
+    ///
     Split,
+
+    ///
+    /// The join token `.`.
+    ///
     Join,
+
+    ///
+    /// The concatenation token `~`.
+    ///
     Concat,
+
+    ///
+    /// The copy token `*`.
+    ///
     Copy,
+
+    ///
+    /// The vowel check token `v`.
+    ///
     Vowel,
+
+    ///
+    /// The consonant check token `c`.
+    ///
     Conso,
-    ToUpper,
-    ToLower,
-    IsUpper,
+
+    ///
+    /// The lowercase tcheck oken `_`.
+    ///
     IsLower,
+
+    ///
+    /// The uppercase check token `^`.
+    ///
+    IsUpper,
+
+    ///
+    /// The lower token `l`.
+    ///
+    ToLower,
+
+    ///
+    /// The upper token `u`.
+    ///
+    ToUpper,
+
+    ///
+    /// The rotate token `@`.
+    ///
     Rotate,
+
+    ///
+    /// The filter token `[x]` where `x` is a [`Filter`] token.
+    ///
     Filter(Filter),
+
+    ///
+    /// The slice token `|x.x|` where `x` are empty or [`usize`].
+    ///
     Slice(Option<usize>, Option<usize>),
 }
 
@@ -69,7 +143,7 @@ impl Display for Token {
             Self::Rotate => f.write_str("@"),
             Self::IsUpper => f.write_str("^"),
             Self::IsLower => f.write_str("_"),
-            Self::Filter(filter) => write!(f, "[{}]", filter),
+            Self::Filter(filter) => filter.fmt(f),
             Self::Slice(lower, upper) => {
                 write!(
                     f,
@@ -90,6 +164,7 @@ impl Display for Token {
 /// Finds the next token inside the given `input` string.
 ///
 /// ### Returns
+///
 /// * [`Ok((rest, token))`] if the `input` starts with a valid token
 ///   * `rest` contains the the rest of the string after the parsed token
 ///   * `token` contains the parsed [`Token`]
@@ -113,11 +188,11 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
         tag("*"),
         tag("v"),
         tag("c"),
+        tag("_"),
+        tag("^"),
         tag("l"),
         tag("u"),
         tag("@"),
-        tag("^"),
-        tag("_"),
     );
 
     let double = (delimited(
@@ -130,14 +205,14 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
     // for those to be included in the `single` alt call
     let single_delim = (delimited(
         tag("["),
-        alt((tag("v"), tag("c"), tag("^"), tag("_"))),
+        alt((tag("v"), tag("c"), tag("_"), tag("^"))),
         tag("]"),
     ),);
 
     // type inference died on me here because of the error types
-    let single_res: Result<(&str, &str), Err<NomError<&str>>> = alt(single)(input);
-    let single_delim_res: Result<(&str, &str), Err<NomError<&str>>> = alt(single_delim)(input);
-    let double_res: Result<(&str, (&str, &str)), Err<NomError<&str>>> = alt(double)(input);
+    let single_res: Result<(&str, &str), NomErr<NomError<&str>>> = alt(single)(input);
+    let single_delim_res: Result<(&str, &str), NomErr<NomError<&str>>> = alt(single_delim)(input);
+    let double_res: Result<(&str, (&str, &str)), NomErr<NomError<&str>>> = alt(double)(input);
 
     if let Ok((rest, parsed)) = single_res {
         Ok((
@@ -151,11 +226,11 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
                 "*" => Token::Copy,
                 "v" => Token::Vowel,
                 "c" => Token::Conso,
+                "_" => Token::IsLower,
+                "^" => Token::IsUpper,
                 "l" => Token::ToLower,
                 "u" => Token::ToUpper,
                 "@" => Token::Rotate,
-                "^" => Token::IsUpper,
-                "_" => Token::IsLower,
                 _ => unreachable!(),
             },
         ))
@@ -165,8 +240,8 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
             match parsed {
                 "v" => Token::Filter(Filter::Vowel),
                 "c" => Token::Filter(Filter::Conso),
-                "^" => Token::Filter(Filter::Upper),
                 "_" => Token::Filter(Filter::Lower),
+                "^" => Token::Filter(Filter::Upper),
                 _ => unreachable!(),
             },
         ))
@@ -183,43 +258,61 @@ mod test {
 
     #[test]
     fn slash() {
-        assert_eq!(next_token("<"), Ok(("", Token::In)));
-        assert_eq!(next_token(">"), Ok(("", Token::Out)));
-        assert_eq!(next_token("/"), Ok(("", Token::Split)));
-        assert_eq!(next_token("."), Ok(("", Token::Join)));
-        assert_eq!(next_token("v"), Ok(("", Token::Vowel)));
-        assert_eq!(next_token("c"), Ok(("", Token::Conso)));
-        assert_eq!(next_token("l"), Ok(("", Token::ToLower)));
-        assert_eq!(next_token("u"), Ok(("", Token::ToUpper)));
-        assert_eq!(next_token("@"), Ok(("", Token::Rotate)));
-        assert_eq!(next_token("^"), Ok(("", Token::IsUpper)));
-        assert_eq!(next_token("_"), Ok(("", Token::IsLower)));
+        assert_eq!(next_token("<").unwrap(), ("", Token::In));
+        assert_eq!(next_token(">").unwrap(), ("", Token::Out));
+        assert_eq!(next_token("/").unwrap(), ("", Token::Split));
+        assert_eq!(next_token(".").unwrap(), ("", Token::Join));
+        assert_eq!(next_token("v").unwrap(), ("", Token::Vowel));
+        assert_eq!(next_token("c").unwrap(), ("", Token::Conso));
+        assert_eq!(next_token("l").unwrap(), ("", Token::ToLower));
+        assert_eq!(next_token("u").unwrap(), ("", Token::ToUpper));
+        assert_eq!(next_token("_").unwrap(), ("", Token::IsLower));
+        assert_eq!(next_token("^").unwrap(), ("", Token::IsUpper));
+        assert_eq!(next_token("@").unwrap(), ("", Token::Rotate));
     }
 
     #[test]
     fn filter() {
-        assert_eq!(next_token("[v]"), Ok(("", Token::Filter(Filter::Vowel))));
-        assert_eq!(next_token("[c]"), Ok(("", Token::Filter(Filter::Conso))));
-        assert_eq!(next_token("[^]"), Ok(("", Token::Filter(Filter::Upper))));
-        assert_eq!(next_token("[_]"), Ok(("", Token::Filter(Filter::Lower))));
+        assert_eq!(
+            next_token("[v]").unwrap(),
+            ("", Token::Filter(Filter::Vowel))
+        );
+        assert_eq!(
+            next_token("[c]").unwrap(),
+            ("", Token::Filter(Filter::Conso))
+        );
+        assert_eq!(
+            next_token("[_]").unwrap(),
+            ("", Token::Filter(Filter::Lower))
+        );
+        assert_eq!(
+            next_token("[^]").unwrap(),
+            ("", Token::Filter(Filter::Upper))
+        );
     }
 
     #[test]
     fn slice() {
-        assert_eq!(next_token("|.|"), Ok(("", Token::Slice(None, None))));
-        assert_eq!(next_token("|.42|"), Ok(("", Token::Slice(None, Some(42)))));
-        assert_eq!(next_token("|42.|"), Ok(("", Token::Slice(Some(42), None))));
+        assert_eq!(next_token("|.|").unwrap(), ("", Token::Slice(None, None)));
         assert_eq!(
-            next_token("|42.42|"),
-            Ok(("", Token::Slice(Some(42), Some(42))))
+            next_token("|.42|").unwrap(),
+            ("", Token::Slice(None, Some(42)))
+        );
+        assert_eq!(
+            next_token("|42.|").unwrap(),
+            ("", Token::Slice(Some(42), None))
+        );
+        assert_eq!(
+            next_token("|42.42|").unwrap(),
+            ("", Token::Slice(Some(42), Some(42)))
         );
     }
 
     #[test]
     fn repeating() {
-        assert_eq!(next_token("<>/|.|"), Ok((">/|.|", Token::In)));
-        assert_eq!(next_token(">/|.|"), Ok(("/|.|", Token::Out)));
-        assert_eq!(next_token("/|.|"), Ok(("|.|", Token::Split)));
-        assert_eq!(next_token("|.|"), Ok(("", Token::Slice(None, None))));
+        assert_eq!(next_token("<>/|.|").unwrap(), (">/|.|", Token::In));
+        assert_eq!(next_token(">/|.|").unwrap(), ("/|.|", Token::Out));
+        assert_eq!(next_token("/|.|").unwrap(), ("|.|", Token::Split));
+        assert_eq!(next_token("|.|").unwrap(), ("", Token::Slice(None, None)));
     }
 }

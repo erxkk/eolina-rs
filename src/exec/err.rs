@@ -6,7 +6,7 @@ use std::{
 };
 
 ///
-/// Represents an error during interpretation of an eolina programm.
+/// Represents an error taht can occur during execution of a program.
 ///
 #[derive(Debug)]
 pub struct Error {
@@ -15,7 +15,7 @@ pub struct Error {
 
 impl Error {
     ///
-    /// Creates a new [`Error`] for a parse error with the given inner [`ParseError`].
+    /// Creates a new [`Error`] for a parse error with the given inner [`parse::Error`].
     ///
     pub fn parse(inner: parse::Error) -> Self {
         Self {
@@ -43,8 +43,8 @@ impl Error {
     }
 
     ///
-    /// Creates a new [`Error`] for a concat type mismatch with the given the `expected`
-    /// and `actual` types.
+    /// Creates a new [`Error`] for a concat type mismatch with the given the `left`
+    /// and `right` types.
     ///
     pub fn mismatch(left: ValueKind, right: ValueKind) -> Self {
         Self {
@@ -63,12 +63,18 @@ impl Error {
 }
 
 impl From<io::Error> for Error {
+    ///
+    /// Creates an [`Error`] from an [`io::Error`].
+    ///
     fn from(inner: io::Error) -> Self {
         Self::io(inner)
     }
 }
 
 impl From<parse::Error> for Error {
+    ///
+    /// Creates an [`Error`] from a [`parse::Error`].
+    ///
     fn from(inner: parse::Error) -> Self {
         Self::parse(inner)
     }
@@ -90,19 +96,19 @@ enum ErrorKind {
     ///
     Parse(parse::Error),
     ///
-    /// An error occured during IO (`<` failed reading / `>` failed writing).
+    /// An error occured during IO.
     ///
     Io(io::Error),
     ///
-    /// The top of the stack did not conain the right type of value for the current function.
+    /// A function argument was not of an expected type.
     ///
     ArgMismatch(&'static [ValueKind], ValueKind),
     ///
-    /// The tow last values on the stack were not of the same type.
+    /// Two values were not of the same type.
     ///
     Mismatch(ValueKind, ValueKind),
     ///
-    /// The stack was empty, but there was still a function left that requires a non-IO input.
+    /// The queue was empty.
     ///
     QueueEmpty,
 }
@@ -110,8 +116,8 @@ enum ErrorKind {
 impl Display for ErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
-            Self::Parse(inner) => write!(f, "parse error: ({})", inner),
-            Self::Io(inner) => write!(f, "io error: ({})", inner),
+            Self::Parse(inner) => write!(f, "parse error: {}", inner),
+            Self::Io(inner) => write!(f, "io error: {}", inner),
             Self::ArgMismatch(expected, actual) => {
                 if expected.len() == 1 {
                     write!(
@@ -120,11 +126,18 @@ impl Display for ErrorKind {
                         expected[0], actual
                     )
                 } else {
-                    write!(
-                        f,
-                        "arg mismatch: expected any of `{:?}`, found `{}`",
-                        expected, actual
-                    )
+                    write!(f, "arg mismatch: expected any of")?;
+
+                    let mut iter = expected.iter();
+                    write!(f, " `{}`", iter.next().unwrap())?;
+
+                    for expected in iter {
+                        write!(f, ", `{}`", expected)?;
+                    }
+
+                    write!(f, ", found `{}`", actual)?;
+
+                    Ok(())
                 }
             }
             Self::Mismatch(left, right) => {

@@ -3,7 +3,7 @@ use std::fmt::{self, Display, Formatter};
 ///
 /// Represents an error during tokenization.
 ///
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug)]
 pub struct Error {
     slice: String,
     kind: ErrorKind,
@@ -43,16 +43,23 @@ impl Display for Error {
 ///
 /// Represents an error during tokenization.
 ///
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum ErrorKind {
+#[derive(Debug)]
+enum ErrorKind {
+    ///
+    /// The given program was empty.
+    ///
     Empty,
+
+    ///
+    /// Not known token was found at the start of the program.
+    ///
     Unknown,
 }
 
 impl Display for ErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Empty => f.write_str("empty slice"),
+            Self::Empty => f.write_str("empty program"),
             Self::Unknown => f.write_str("unknown token"),
         }
     }

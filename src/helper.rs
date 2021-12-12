@@ -2,13 +2,34 @@
 /// An extension trait for checking checking ascii chars for specific properties.
 ///
 pub trait AsciiCheckExt {
+    ///
+    /// Converts [`self`] to it's uppercase represenation.
+    ///
     fn to_upper(&self) -> Self;
+
+    ///
+    /// Converts [`self`] to it's lowercase represenation.
+    ///
     fn to_lower(&self) -> Self;
 
+    ///
+    /// Returns whether [`self`] is in it's uppercase represenation.
+    ///
     fn is_upper(&self) -> bool;
+
+    ///
+    /// Returns whether [`self`] is in it's lowercase represenation.
+    ///
     fn is_lower(&self) -> bool;
 
+    ///
+    /// Returns whether [`self`] is or contains only vowels.
+    ///
     fn is_vowel(&self) -> bool;
+
+    ///
+    /// Returns whether [`self`] is or contains only consonants.
+    ///
     fn is_conso(&self) -> bool;
 }
 

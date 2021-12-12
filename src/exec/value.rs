@@ -2,20 +2,22 @@ use super::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 
 ///
-/// Represents a value accepted or returned by a eolina function.
+/// Represents a value accepted or returned by a function.
 ///
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Value {
     ///
-    /// A string.
+    /// A [`String`].
     ///
     String(String),
+
     ///
-    /// A array fo strings.
+    /// A vec of [`String`]s.
     ///
     StringVec(Vec<String>),
+
     ///
-    /// A boolean.
+    /// A [`bool`].
     ///
     Bool(bool),
 }

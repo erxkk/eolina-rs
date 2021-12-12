@@ -10,19 +10,15 @@ use std::{
 /// A repl context, contains input and output.
 ///
 pub struct ReplContext {
-    stdin: io::Stdin,
-    stdout: io::Stdout,
     execs: HashMap<String, Executor>,
 }
 
 impl ReplContext {
     ///
-    /// Creates a new [`ReplContext`] with stdin and stdout as input and output.
+    /// Creates a new [`ReplContext`].
     ///
     pub fn new() -> Self {
         Self {
-            stdin: io::stdin(),
-            stdout: io::stdout(),
             execs: HashMap::new(),
         }
     }
@@ -30,12 +26,16 @@ impl ReplContext {
     ///
     /// Continously runs this repl context until the program is prompted to exit.
     ///
+    /// ### Returns
+    /// This function does not return.
+    ///
     pub fn run(&mut self) -> ! {
         'outer: loop {
-            write!(self.stdout, ">>> ").expect("unrecoverable error during writing");
-            self.stdout.flush().expect("could not flush");
+            print!(">>> ");
+            io::stdout().flush().unwrap();
+
             let mut input = String::new();
-            self.stdin
+            io::stdin()
                 .read_line(&mut input)
                 .expect("unrecoverable error during reading");
 
@@ -57,8 +57,7 @@ impl ReplContext {
                 match self.command(input) {
                     Ok(_) => {}
                     Err(err) => {
-                        writeln!(self.stdout, "error: {}", err)
-                            .expect("unrecoverable error during writing");
+                        println!("    error: {}", err);
                     }
                 }
                 continue 'outer;
@@ -66,7 +65,7 @@ impl ReplContext {
 
             'inner: for res in Executor::new(Rc::new(input)) {
                 if let Some(err) = res.err() {
-                    eprintln!("error: {}", err);
+                    eprintln!("    error: {}", err);
                     break 'inner;
                 }
             }
@@ -76,36 +75,37 @@ impl ReplContext {
     ///
     /// Executes a command for this context.
     ///
+    /// ### Returns
+    ///
+    /// * [`Ok(())`] if the command was executed successfully
+    /// * [`Err(string)`] if the command could not be executed
+    ///   * `string` contains the error reason
+    ///
     fn command(&mut self, cmd: &str) -> Result<(), String> {
         match cmd {
             "exit" | "quit" | "q" => process::exit(0),
             "help" | "h" | "?" => {
-                writeln!(
-                    self.stdout,
-                    r#"commands:
-exit: exits the program
-help: prints all commands"#
-                )
-                .expect("unrecoverable error during writing");
+                println!(
+                    r#"    exit | quit | q # exits the program
+    help | h | ?    # prints all commands
+    s               # saves a program `!s sort <*[^][_]~>`
+    c               # calls a program `!s sort`
+    r               # removes a program `!r sort`"#
+                );
                 Ok(())
             }
             "list" | "ls" => {
-                writeln!(self.stdout, "programs:").expect("unrecoverable error during writing");
                 for (name, exec) in self.execs.iter() {
-                    writeln!(self.stdout, "   `{}`: {}", name, exec.input())
-                        .expect("unrecoverable error during writing")
+                    println!("    {} # {}", name, exec.input());
                 }
                 Ok(())
             }
             "example" | "eg" => {
-                writeln!(
-                    self.stdout,
-                    r#"examples:
-<>          # echo program
-<*>>        # duplicate echo
-<*[^][_]~>  # oders by case, upper first"#
-                )
-                .expect("unrecoverable error during writing");
+                println!(
+                    r#"    <>          # echo program
+    <*>>        # duplicate echo
+    <*[^][_]~>  # orders by case, upper first"#
+                );
                 Ok(())
             }
             x => match x.as_bytes() {
@@ -133,8 +133,7 @@ help: prints all commands"#
 
                     match self.execs.get_mut(name) {
                         Some(exec) => {
-                            writeln!(self.stdout, "running: `{}`: {}", name, exec.input())
-                                .expect("unrecoverable error during writing");
+                            println!("    running: `{}`: {}", name, exec.input());
 
                             for res in exec.by_ref() {
                                 if let Some(err) = res.err() {
@@ -159,8 +158,7 @@ help: prints all commands"#
 
                     match self.execs.remove(name) {
                         Some(exec) => {
-                            writeln!(self.stdout, "removed program: `{}`: {}", name, exec.input())
-                                .expect("unrecoverable error during writing");
+                            println!("removed program: `{}`: {}", name, exec.input());
                             Ok(())
                         }
                         None => Err(format!("unknown program: `{}`", x)),
