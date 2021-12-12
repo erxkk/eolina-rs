@@ -66,7 +66,7 @@ impl ReplContext {
 
             'inner: for res in Executor::new(Rc::new(input)) {
                 if let Some(err) = res.err() {
-                    eprintln!("error: {:?}", err);
+                    eprintln!("error: {}", err);
                     break 'inner;
                 }
             }
@@ -138,7 +138,7 @@ help: prints all commands"#
 
                             for res in exec.by_ref() {
                                 if let Some(err) = res.err() {
-                                    eprintln!("error: {:?}", err);
+                                    eprintln!("error: {}", err);
                                     break;
                                 }
                             }
