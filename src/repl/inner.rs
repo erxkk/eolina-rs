@@ -82,7 +82,9 @@ impl ReplContext {
             "help" | "h" | "?" => {
                 writeln!(
                     self.stdout,
-                    "commands: \nexit: exits the program\nhelp: prints all commands"
+                    r#"commands:
+exit: exits the program
+help: prints all commands"#
                 )
                 .expect("unrecoverable error during writing");
                 Ok(())
@@ -93,6 +95,17 @@ impl ReplContext {
                     writeln!(self.stdout, "   `{}`: {}", name, exec.input())
                         .expect("unrecoverable error during writing")
                 }
+                Ok(())
+            }
+            "example" | "eg" => {
+                writeln!(
+                    self.stdout,
+                    r#"examples:
+<>          # echo program
+<*>>        # duplicate echo
+<*[^][_]~>  # oders by case, upper first"#
+                )
+                .expect("unrecoverable error during writing");
                 Ok(())
             }
             x => match x.as_bytes() {
