@@ -7,7 +7,7 @@ use std::{
 };
 
 ///
-/// A repl context, contains input and output.
+/// A repl context, used for storing and executing programs.
 ///
 pub struct ReplContext {
     execs: HashMap<String, Executor>,
@@ -40,12 +40,8 @@ impl ReplContext {
                 .expect("unrecoverable error during reading");
 
             // truncate the '\n'
-            match input.pop() {
-                Some('\n') => {}
-                Some(x) => input.push(x),
-                None => {
-                    continue 'outer;
-                }
+            if input.ends_with('\n') {
+                input.truncate(input.len() - 1);
             }
 
             // skip

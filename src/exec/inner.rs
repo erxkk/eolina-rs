@@ -94,6 +94,12 @@ impl Executor {
                 io::stdout().flush()?;
 
                 io::stdin().read_line(&mut val)?;
+
+                // truncate the '\n'
+                if val.ends_with('\n') {
+                    val.truncate(val.len() - 1);
+                }
+
                 self.values.push_back(Value::String(val));
             }
             Token::Out => {

@@ -209,10 +209,13 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
         tag("]"),
     ),);
 
-    // type inference died on me here because of the error types
-    let single_res: Result<(&str, &str), NomErr<NomError<&str>>> = alt(single)(input);
-    let single_delim_res: Result<(&str, &str), NomErr<NomError<&str>>> = alt(single_delim)(input);
-    let double_res: Result<(&str, (&str, &str)), NomErr<NomError<&str>>> = alt(double)(input);
+    type Single<'a> = Result<(&'a str, &'a str), NomErr<NomError<&'a str>>>;
+    type Double<'a> = Result<(&'a str, (&'a str, &'a str)), NomErr<NomError<&'a str>>>;
+
+    // TODO: if type_ascription is stabilized, these can be evaluated one at a time
+    let single_res: Single = alt(single)(input);
+    let single_delim_res: Single = alt(single_delim)(input);
+    let double_res: Double = alt(double)(input);
 
     if let Ok((rest, parsed)) = single_res {
         Ok((
