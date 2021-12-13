@@ -306,16 +306,10 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
             rest,
             Token::Slice(EolinaRange::from_components(
                 first.map(|(sign, num)| {
-                    (
-                        sign.is_some(),
-                        num.parse().expect("combinator must fail"),
-                    )
+                    (sign.is_some(), num.parse().expect("combinator must fail"))
                 }),
                 second.map(|(sign, num)| {
-                    (
-                        sign.is_some(),
-                        num.parse().expect("combinator must fail"),
-                    )
+                    (sign.is_some(), num.parse().expect("combinator must fail"))
                 }),
             )),
         ))
