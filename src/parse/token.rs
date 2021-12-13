@@ -4,7 +4,7 @@ use nom::{
     bytes::complete::tag,
     character::complete::digit0,
     error::Error as NomError,
-    sequence::{delimited, separated_pair},
+    sequence::{delimited, pair, separated_pair},
     Err as NomErr,
 };
 use std::fmt::Display;
@@ -134,7 +134,7 @@ pub enum Token {
     ///
     /// The rotate token `@`.
     ///
-    Rotate,
+    Rotate(usize),
 
     ///
     /// A check token `{x}` where `x` is a [`Map`] token.
@@ -163,7 +163,7 @@ impl Display for Token {
             Self::Copy => f.write_str("*"),
             Self::IsVowel => f.write_str("v"),
             Self::IsConso => f.write_str("c"),
-            Self::Rotate => f.write_str("@"),
+            Self::Rotate(num) => write!(f, "@{}", num),
             Self::IsUpper => f.write_str("^"),
             Self::IsLower => f.write_str("_"),
             Self::Map(map) => map.fmt(f),
@@ -214,8 +214,9 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
         tag("c"),
         tag("_"),
         tag("^"),
-        tag("@"),
     );
+
+    let double = (pair(tag("@"), digit0),);
 
     let slice = (delimited(
         tag("|"),
@@ -240,6 +241,7 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
 
     // TODO: if type_ascription is stabilized, these can be evaluated one at a time
     let single_res: Single = alt(single)(input);
+    let double_res: Double = alt(double)(input);
     let filter_res: Single = alt(filter)(input);
     let map_res: Single = alt(map)(input);
     let slice_res: Double = alt(slice)(input);
@@ -258,7 +260,14 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
                 "c" => Token::IsConso,
                 "_" => Token::IsLower,
                 "^" => Token::IsUpper,
-                "@" => Token::Rotate,
+                _ => unreachable!(),
+            },
+        ))
+    } else if let Ok((rest, (first, second))) = double_res {
+        Ok((
+            rest,
+            match (first, second) {
+                ("@", x) => Token::Rotate(x.parse().unwrap_or(1)),
                 _ => unreachable!(),
             },
         ))
@@ -295,7 +304,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn slash() {
+    fn single() {
         assert_eq!(next_token("<").unwrap(), ("", Token::In));
         assert_eq!(next_token(">").unwrap(), ("", Token::Out));
         assert_eq!(next_token("/").unwrap(), ("", Token::Split));
@@ -304,7 +313,13 @@ mod test {
         assert_eq!(next_token("c").unwrap(), ("", Token::IsConso));
         assert_eq!(next_token("_").unwrap(), ("", Token::IsLower));
         assert_eq!(next_token("^").unwrap(), ("", Token::IsUpper));
-        assert_eq!(next_token("@").unwrap(), ("", Token::Rotate));
+    }
+
+    #[test]
+    fn dobule() {
+        assert_eq!(next_token("@").unwrap(), ("", Token::Rotate(1)));
+        assert_eq!(next_token("@1").unwrap(), ("", Token::Rotate(1)));
+        assert_eq!(next_token("@3").unwrap(), ("", Token::Rotate(3)));
     }
 
     #[test]

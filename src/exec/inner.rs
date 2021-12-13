@@ -106,8 +106,8 @@ impl Executor {
                 let val = self.pop_queue()?;
                 println!("out: {}", val);
             }
-            Token::Rotate => {
-                self.values.rotate_left(1);
+            Token::Rotate(num) => {
+                self.values.rotate_left(num);
             }
             Token::Split => {
                 let val = self.pop_queue()?;
