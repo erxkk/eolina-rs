@@ -265,7 +265,11 @@ fn __filter<T: AsciiExt>(val: &T, check: CheckToken) -> bool {
 /// * [`Err(error)`]
 ///   * `error` contains an arg type mismatch [`Error`]
 ///
-pub fn slice(input: Value, lower: Option<usize>, upper: Option<usize>) -> Result<Value, Error> {
+pub fn slice(input: Value, lower: Option<isize>, upper: Option<isize>) -> Result<Value, Error> {
+    let len = input.unwrap_len()?;
+    let lower = lower.map(|num| if num.is_negative() { len as isize + num } else { num } as usize);
+    let upper = upper.map(|num| if num.is_negative() { len as isize + num } else { num } as usize);
+
     match input {
         Value::String(string) => Ok(Value::String(match (lower, upper) {
             (Some(l), Some(u)) => string[l..u].to_owned(),
@@ -405,6 +409,31 @@ mod test {
             )
             .unwrap(),
             Value::StringVec(vec!["abc".to_owned()])
+        );
+    }
+
+    #[test]
+    fn slice() {
+        assert_eq!(
+            super::slice(Value::String("abcdefg".to_owned()), None, None).unwrap(),
+            Value::String("abcdefg".to_owned())
+        );
+        assert_eq!(
+            super::slice(Value::String("abcdefg".to_owned()), Some(3), None).unwrap(),
+            Value::String("defg".to_owned())
+        );
+        assert_eq!(
+            super::slice(Value::String("abcdefg".to_owned()), None, Some(3)).unwrap(),
+            Value::String("abc".to_owned())
+        );
+
+        assert_eq!(
+            super::slice(Value::String("abcdefg".to_owned()), Some(-3), None).unwrap(),
+            Value::String("efg".to_owned())
+        );
+        assert_eq!(
+            super::slice(Value::String("abcdefg".to_owned()), None, Some(-3)).unwrap(),
+            Value::String("abcd".to_owned())
         );
     }
 }

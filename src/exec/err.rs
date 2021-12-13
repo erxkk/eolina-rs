@@ -3,6 +3,7 @@ use crate::parse;
 use std::{
     fmt::{Display, Formatter, Result as FmtResult},
     io,
+    ops::Range,
 };
 
 ///
@@ -95,18 +96,28 @@ enum ErrorKind {
     /// An error occured during parsing.
     ///
     Parse(parse::Error),
+
     ///
     /// An error occured during IO.
     ///
     Io(io::Error),
+
+    ///
+    /// An error occured during slicing, the ranges are out
+    /// of raget range or have incompatible indecies.
+    ///
+    Slice(Range<isize>, Range<usize>, usize),
+
     ///
     /// A function argument was not of an expected type.
     ///
     ArgMismatch(&'static [ValueKind], ValueKind),
+
     ///
     /// Two values were not of the same type.
     ///
     Mismatch(ValueKind, ValueKind),
+
     ///
     /// The queue was empty.
     ///
@@ -118,6 +129,19 @@ impl Display for ErrorKind {
         match self {
             Self::Parse(inner) => write!(f, "parse error: {}", inner),
             Self::Io(inner) => write!(f, "io error: {}", inner),
+            Self::Slice(given, tranlated, length) => {
+                write!(
+                    f,
+                    "slice error: {} given `|{}.{}|` => translated `|{}.{}|`",
+                    (tranlated.start > tranlated.end)
+                        .then(|| "incompatible".to_owned())
+                        .unwrap_or_else(|| format!("out of range `|0.{}|`", length)),
+                    given.start,
+                    given.end,
+                    tranlated.start,
+                    tranlated.end,
+                )
+            }
             Self::ArgMismatch(expected, actual) => {
                 if expected.len() == 1 {
                     write!(

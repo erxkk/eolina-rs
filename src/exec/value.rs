@@ -63,6 +63,17 @@ impl Value {
             x => Err(Error::arg_mismatch(&[ValueKind::String], x.kind())),
         }
     }
+
+    ///
+    /// Unwraps the length of a [`Value::StringVec`] or [`Value::String`] or returns a mismatch error.
+    ///
+    pub fn unwrap_len(&self) -> Result<usize, Error> {
+        match self {
+            Self::String(inner) => Ok(inner.len()),
+            Self::StringVec(inner) => Ok(inner.len()),
+            x => Err(Error::arg_mismatch(&[ValueKind::String], x.kind())),
+        }
+    }
 }
 
 impl Display for Value {

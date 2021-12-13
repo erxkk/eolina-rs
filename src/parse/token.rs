@@ -2,7 +2,8 @@ use super::Error;
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::digit0,
+    character::complete::{digit0, digit1},
+    combinator::opt,
     error::Error as NomError,
     sequence::{delimited, pair, separated_pair},
     Err as NomErr,
@@ -132,7 +133,7 @@ pub enum Token {
     IsUpper,
 
     ///
-    /// The rotate token `@`.
+    /// The rotate token `@x` where `x` is empty or [`usize`].
     ///
     Rotate(usize),
 
@@ -147,9 +148,9 @@ pub enum Token {
     Filter(Check),
 
     ///
-    /// The slice token `|x.x|` where `x` are empty or [`usize`].
+    /// The slice token `|x.x|` where `x` are empty or [`isize`].
     ///
-    Slice(Option<usize>, Option<usize>),
+    Slice(Option<isize>, Option<isize>),
 }
 
 impl Display for Token {
@@ -218,9 +219,14 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
 
     let double = (pair(tag("@"), digit0),);
 
+    // i don't want to talk about it
     let slice = (delimited(
         tag("|"),
-        separated_pair(digit0, tag("."), digit0),
+        separated_pair(
+            opt(pair(opt(tag("-")), digit1)),
+            tag("."),
+            opt(pair(opt(tag("-")), digit1)),
+        ),
         tag("|"),
     ),);
 
@@ -239,12 +245,24 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
     type Single<'a> = Result<(&'a str, &'a str), NomErr<NomError<&'a str>>>;
     type Double<'a> = Result<(&'a str, (&'a str, &'a str)), NomErr<NomError<&'a str>>>;
 
+    // no i really don't wnat to talk about it
+    type NestedDouble<'a> = Result<
+        (
+            &'a str,
+            (
+                Option<(Option<&'a str>, &'a str)>,
+                Option<(Option<&'a str>, &'a str)>,
+            ),
+        ),
+        NomErr<NomError<&'a str>>,
+    >;
+
     // TODO: if type_ascription is stabilized, these can be evaluated one at a time
     let single_res: Single = alt(single)(input);
     let double_res: Double = alt(double)(input);
     let filter_res: Single = alt(filter)(input);
     let map_res: Single = alt(map)(input);
-    let slice_res: Double = alt(slice)(input);
+    let slice_res: NestedDouble = alt(slice)(input);
 
     if let Ok((rest, parsed)) = single_res {
         Ok((
@@ -293,7 +311,25 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
             },
         ))
     } else if let Ok((rest, (first, second))) = slice_res {
-        Ok((rest, Token::Slice(first.parse().ok(), second.parse().ok())))
+        Ok((
+            rest,
+            Token::Slice(
+                first
+                    .map(|(sign, num)| {
+                        num.parse::<isize>()
+                            .ok()
+                            .map(|num| num * sign.map(|_| -1).unwrap_or(1))
+                    })
+                    .unwrap_or_default(),
+                second
+                    .map(|(sign, num)| {
+                        num.parse::<isize>()
+                            .ok()
+                            .map(|num| num * sign.map(|_| -1).unwrap_or(1))
+                    })
+                    .unwrap_or_default(),
+            ),
+        ))
     } else {
         Err(Error::unknown(input.to_owned()))
     }
