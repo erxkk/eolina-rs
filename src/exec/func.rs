@@ -1,6 +1,6 @@
 use super::{Error, Value, ValueKind};
-use crate::helper::AsciiCheckExt;
-use crate::parse::FilterToken;
+use crate::helper::AsciiExt;
+use crate::parse::{CheckToken, MapToken};
 
 ///
 /// Splits the given input into it's [`char`]s.
@@ -80,57 +80,6 @@ pub fn concat(input1: Value, input2: Value) -> Result<Value, Error> {
             x.kind(),
         )),
         x => Err(Error::mismatch(x.0.kind(), x.1.kind())),
-    }
-}
-
-///
-/// Converts each element in the given input to it's uppercase representation.
-///
-/// ### Accepts
-///
-/// * [`ValueKind::String`]
-/// * [`ValueKind::StringVec`]
-///
-/// ### Returns
-///
-/// * [`Ok(stringOrVec)`]
-///   * `stringOrVec` contains uppercased input
-/// * [`Err(error)`]
-///   * `error` contains an arg type mismatch [`Error`]
-///
-pub fn to_upper(input: Value) -> Result<Value, Error> {
-    __to(input, |s| s.to_upper())
-}
-
-///
-/// Converts each element in the given input to it's lowercase representation.
-///
-/// ### Accepts
-///
-/// * [`ValueKind::String`]
-/// * [`ValueKind::StringVec`]
-///
-/// ### Returns
-///
-/// * [`Ok(stringOrVec)`]
-///   * `stringOrVec` contains lowercased input
-/// * [`Err(error)`]
-///   * `error` contains an arg type mismatch [`Error`]
-///
-pub fn to_lower(input: Value) -> Result<Value, Error> {
-    __to(input, |s| s.to_lower())
-}
-
-fn __to(input: Value, converter: impl Fn(&String) -> String) -> Result<Value, Error> {
-    match input {
-        Value::String(string) => Ok(Value::String(converter(&string))),
-        Value::StringVec(vec) => Ok(Value::StringVec(
-            vec.into_iter().map(|string| converter(&string)).collect(),
-        )),
-        x => Err(Error::arg_mismatch(
-            &[ValueKind::StringVec, ValueKind::String],
-            x.kind(),
-        )),
     }
 }
 
@@ -222,6 +171,42 @@ fn __check_all(input: Value, check: impl Fn(&String) -> bool) -> Result<Value, E
 }
 
 ///
+/// Maps each element in the given input with a given map.
+///
+/// ### Accepts
+///
+/// * [`ValueKind::String`]
+/// * [`ValueKind::StringVec`]
+///
+/// ### Returns
+///
+/// * [`Ok(stringOrVec)`]
+///   * `stringOrVec` contains the mapped input
+/// * [`Err(error)`]
+///   * `error` contains an arg type mismatch [`Error`]
+///
+pub fn map(input: Value, map: MapToken) -> Result<Value, Error> {
+    match input {
+        Value::String(string) => Ok(Value::String(__map(string, map))),
+        Value::StringVec(vec) => Ok(Value::StringVec(
+            vec.into_iter().map(|string| __map(string, map)).collect(),
+        )),
+        x => Err(Error::arg_mismatch(
+            &[ValueKind::StringVec, ValueKind::String],
+            x.kind(),
+        )),
+    }
+}
+
+fn __map<T: AsciiExt>(val: T, map: MapToken) -> T {
+    match map {
+        MapToken::Lower => val.into_lower(),
+        MapToken::Upper => val.into_upper(),
+        MapToken::Swap => val.into_swap(),
+    }
+}
+
+///
 /// Filters out each element in the given input that does not pass a given check.
 ///
 /// ### Accepts
@@ -236,7 +221,7 @@ fn __check_all(input: Value, check: impl Fn(&String) -> bool) -> Result<Value, E
 /// * [`Err(error)`]
 ///   * `error` contains an arg type mismatch [`Error`]
 ///
-pub fn filter(input: Value, check: FilterToken) -> Result<Value, Error> {
+pub fn filter(input: Value, check: CheckToken) -> Result<Value, Error> {
     match input {
         Value::String(string) => Ok(Value::String(
             string
@@ -256,12 +241,12 @@ pub fn filter(input: Value, check: FilterToken) -> Result<Value, Error> {
     }
 }
 
-fn __filter<T: AsciiCheckExt>(val: &T, check: FilterToken) -> bool {
+fn __filter<T: AsciiExt>(val: &T, check: CheckToken) -> bool {
     match check {
-        FilterToken::Vowel => val.is_vowel(),
-        FilterToken::Conso => val.is_conso(),
-        FilterToken::Upper => val.is_upper(),
-        FilterToken::Lower => val.is_lower(),
+        CheckToken::Vowel => val.is_vowel(),
+        CheckToken::Conso => val.is_conso(),
+        CheckToken::Upper => val.is_upper(),
+        CheckToken::Lower => val.is_lower(),
     }
 }
 
@@ -327,22 +312,6 @@ mod test {
     }
 
     #[test]
-    fn to_upper() {
-        assert_eq!(
-            super::to_upper(Value::String("Abc".to_owned())).unwrap(),
-            Value::String("ABC".to_owned())
-        )
-    }
-
-    #[test]
-    fn to_lower() {
-        assert_eq!(
-            super::to_lower(Value::String("Abc".to_owned())).unwrap(),
-            Value::String("abc".to_owned())
-        )
-    }
-
-    #[test]
     #[test]
     fn is_conso() {
         assert_eq!(
@@ -392,19 +361,39 @@ mod test {
     }
 
     #[test]
+    fn map() {
+        assert_eq!(
+            super::map(Value::String("abC".to_owned()), MapToken::Upper).unwrap(),
+            Value::String("ABC".to_owned())
+        );
+        assert_eq!(
+            super::map(Value::String("aBc".to_owned()), MapToken::Lower).unwrap(),
+            Value::String("abc".to_owned())
+        );
+        assert_eq!(
+            super::map(
+                Value::StringVec(vec!["AbC".to_owned(), "dEf".to_owned()]),
+                MapToken::Swap
+            )
+            .unwrap(),
+            Value::StringVec(vec!["aBc".to_owned(), "DeF".to_owned()])
+        );
+    }
+
+    #[test]
     fn filter() {
         assert_eq!(
-            super::filter(Value::String("abC".to_owned()), FilterToken::Vowel).unwrap(),
+            super::filter(Value::String("abC".to_owned()), CheckToken::Vowel).unwrap(),
             Value::String("a".to_owned())
         );
         assert_eq!(
-            super::filter(Value::String("aBc".to_owned()), FilterToken::Conso).unwrap(),
+            super::filter(Value::String("aBc".to_owned()), CheckToken::Conso).unwrap(),
             Value::String("Bc".to_owned())
         );
         assert_eq!(
             super::filter(
                 Value::StringVec(vec!["ABC".to_owned(), "def".to_owned()]),
-                FilterToken::Upper
+                CheckToken::Upper
             )
             .unwrap(),
             Value::StringVec(vec!["ABC".to_owned()])
@@ -412,7 +401,7 @@ mod test {
         assert_eq!(
             super::filter(
                 Value::StringVec(vec!["abc".to_owned(), "DEF".to_owned()]),
-                FilterToken::Lower
+                CheckToken::Lower
             )
             .unwrap(),
             Value::StringVec(vec!["abc".to_owned()])

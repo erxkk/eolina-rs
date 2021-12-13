@@ -131,24 +131,14 @@ impl Executor {
                 self.values.push_back(val);
                 self.values.push_back(copy);
             }
-            Token::Vowel => {
+            Token::IsVowel => {
                 let val = self.pop_queue()?;
                 let ret = func::is_vowel(val)?;
                 self.values.push_back(ret);
             }
-            Token::Conso => {
+            Token::IsConso => {
                 let val = self.pop_queue()?;
                 let ret = func::is_conso(val)?;
-                self.values.push_back(ret);
-            }
-            Token::ToUpper => {
-                let val = self.pop_queue()?;
-                let ret = func::to_upper(val)?;
-                self.values.push_back(ret);
-            }
-            Token::ToLower => {
-                let val = self.pop_queue()?;
-                let ret = func::to_lower(val)?;
                 self.values.push_back(ret);
             }
             Token::IsUpper => {
@@ -159,6 +149,11 @@ impl Executor {
             Token::IsLower => {
                 let val = self.pop_queue()?;
                 let ret = func::is_lower(val)?;
+                self.values.push_back(ret);
+            }
+            Token::Map(map) => {
+                let val = self.pop_queue()?;
+                let ret = func::map(val, map)?;
                 self.values.push_back(ret);
             }
             Token::Filter(filter) => {

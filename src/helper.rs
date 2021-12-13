@@ -1,16 +1,23 @@
 ///
-/// An extension trait for checking checking ascii chars for specific properties.
+/// An extension trait for checking checking ascii chars for specific
+/// properties.
 ///
-pub trait AsciiCheckExt {
+pub trait AsciiExt {
     ///
     /// Converts [`self`] to it's uppercase represenation.
     ///
-    fn to_upper(&self) -> Self;
+    fn into_upper(self) -> Self;
 
     ///
     /// Converts [`self`] to it's lowercase represenation.
     ///
-    fn to_lower(&self) -> Self;
+    fn into_lower(self) -> Self;
+
+    ///
+    /// Converts [`self`] to it's lowercase represenation if it was
+    /// uppercase and vice versa.
+    ///
+    fn into_swap(self) -> Self;
 
     ///
     /// Returns whether [`self`] is in it's uppercase represenation.
@@ -33,20 +40,30 @@ pub trait AsciiCheckExt {
     fn is_conso(&self) -> bool;
 }
 
-impl AsciiCheckExt for u8 {
-    fn to_upper(&self) -> Self {
+impl AsciiExt for u8 {
+    fn into_upper(self) -> Self {
         if self.is_lower() {
-            *self
+            self
         } else {
-            *self - (b'a' - b'A')
+            self - (b'a' - b'A')
         }
     }
 
-    fn to_lower(&self) -> Self {
+    fn into_lower(self) -> Self {
         if self.is_upper() {
-            *self + (b'a' - b'A')
+            self + (b'a' - b'A')
         } else {
-            *self
+            self
+        }
+    }
+
+    fn into_swap(self) -> Self {
+        if self.is_upper() {
+            self.into_lower()
+        } else if self.is_lower() {
+            self.into_upper()
+        } else {
+            self
         }
     }
 
@@ -82,13 +99,23 @@ impl AsciiCheckExt for u8 {
     }
 }
 
-impl AsciiCheckExt for char {
-    fn to_upper(&self) -> Self {
+impl AsciiExt for char {
+    fn into_upper(self) -> Self {
         self.to_ascii_uppercase()
     }
 
-    fn to_lower(&self) -> Self {
+    fn into_lower(self) -> Self {
         self.to_ascii_lowercase()
+    }
+
+    fn into_swap(self) -> Self {
+        if self.is_upper() {
+            self.into_lower()
+        } else if self.is_lower() {
+            self.into_upper()
+        } else {
+            self
+        }
     }
 
     fn is_lower(&self) -> bool {
@@ -123,13 +150,17 @@ impl AsciiCheckExt for char {
     }
 }
 
-impl AsciiCheckExt for String {
-    fn to_upper(&self) -> Self {
+impl AsciiExt for String {
+    fn into_upper(self) -> Self {
         self.to_uppercase()
     }
 
-    fn to_lower(&self) -> Self {
+    fn into_lower(self) -> Self {
         self.to_lowercase()
+    }
+
+    fn into_swap(self) -> Self {
+        self.chars().map(|ch| ch.into_swap()).collect()
     }
 
     fn is_upper(&self) -> bool {

@@ -10,10 +10,10 @@ use nom::{
 use std::fmt::Display;
 
 ///
-/// A filter token, a token between `[` and `]`.
+/// A filter or map token, a token between `[` and `]` or `{` and `}` respectively.
 ///
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Filter {
+pub enum Check {
     ///
     /// The vowel filter `v`.
     ///
@@ -25,23 +25,53 @@ pub enum Filter {
     Conso,
 
     ///
-    /// The uppercase filter `u`.
-    ///
-    Upper,
-
-    ///
-    /// The lowercase filter `l`.
+    /// The lowercase filter `_`.
     ///
     Lower,
+
+    ///
+    /// The uppercase filter `^`.
+    ///
+    Upper,
 }
 
-impl Display for Filter {
+impl Display for Check {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Vowel => f.write_str("[v]"),
             Self::Conso => f.write_str("[c]"),
-            Self::Upper => f.write_str("[^]"),
             Self::Lower => f.write_str("[_]"),
+            Self::Upper => f.write_str("[^]"),
+        }
+    }
+}
+///
+/// A filter or map token, a token between `[` and `]` or `{` and `}` respectively.
+///
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Map {
+    ///
+    /// The lowercase map `_`.
+    ///
+    Lower,
+
+    ///
+    /// The uppercase map `^`.
+    ///
+    Upper,
+
+    ///
+    /// The swap case map `%`.
+    ///
+    Swap,
+}
+
+impl Display for Map {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Lower => f.write_str("{_}"),
+            Self::Upper => f.write_str("{^}"),
+            Self::Swap => f.write_str("{%}"),
         }
     }
 }
@@ -84,12 +114,12 @@ pub enum Token {
     ///
     /// The vowel check token `v`.
     ///
-    Vowel,
+    IsVowel,
 
     ///
     /// The consonant check token `c`.
     ///
-    Conso,
+    IsConso,
 
     ///
     /// The lowercase tcheck oken `_`.
@@ -102,24 +132,19 @@ pub enum Token {
     IsUpper,
 
     ///
-    /// The lower token `l`.
-    ///
-    ToLower,
-
-    ///
-    /// The upper token `u`.
-    ///
-    ToUpper,
-
-    ///
     /// The rotate token `@`.
     ///
     Rotate,
 
     ///
-    /// The filter token `[x]` where `x` is a [`Filter`] token.
+    /// A check token `{x}` where `x` is a [`Map`] token.
     ///
-    Filter(Filter),
+    Map(Map),
+
+    ///
+    /// The filter token `[x]` where `x` is a [`Check`] token.
+    ///
+    Filter(Check),
 
     ///
     /// The slice token `|x.x|` where `x` are empty or [`usize`].
@@ -136,13 +161,12 @@ impl Display for Token {
             Self::Join => f.write_str("."),
             Self::Concat => f.write_str("~"),
             Self::Copy => f.write_str("*"),
-            Self::Vowel => f.write_str("v"),
-            Self::Conso => f.write_str("c"),
-            Self::ToUpper => f.write_str("u"),
-            Self::ToLower => f.write_str("l"),
+            Self::IsVowel => f.write_str("v"),
+            Self::IsConso => f.write_str("c"),
             Self::Rotate => f.write_str("@"),
             Self::IsUpper => f.write_str("^"),
             Self::IsLower => f.write_str("_"),
+            Self::Map(map) => map.fmt(f),
             Self::Filter(filter) => filter.fmt(f),
             Self::Slice(lower, upper) => {
                 write!(
@@ -190,23 +214,25 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
         tag("c"),
         tag("_"),
         tag("^"),
-        tag("l"),
-        tag("u"),
         tag("@"),
     );
 
-    let double = (delimited(
+    let slice = (delimited(
         tag("|"),
         separated_pair(digit0, tag("."), digit0),
         tag("|"),
     ),);
 
-    // the reuse of of regular tokens for filters causes ambiguity and does not allow
-    // for those to be included in the `single` alt call
-    let single_delim = (delimited(
+    let filter = (delimited(
         tag("["),
         alt((tag("v"), tag("c"), tag("_"), tag("^"))),
         tag("]"),
+    ),);
+
+    let map = (delimited(
+        tag("{"),
+        alt((tag("_"), tag("^"), tag("%"))),
+        tag("}"),
     ),);
 
     type Single<'a> = Result<(&'a str, &'a str), NomErr<NomError<&'a str>>>;
@@ -214,8 +240,9 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
 
     // TODO: if type_ascription is stabilized, these can be evaluated one at a time
     let single_res: Single = alt(single)(input);
-    let single_delim_res: Single = alt(single_delim)(input);
-    let double_res: Double = alt(double)(input);
+    let filter_res: Single = alt(filter)(input);
+    let map_res: Single = alt(map)(input);
+    let slice_res: Double = alt(slice)(input);
 
     if let Ok((rest, parsed)) = single_res {
         Ok((
@@ -227,28 +254,36 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
                 "." => Token::Join,
                 "~" => Token::Concat,
                 "*" => Token::Copy,
-                "v" => Token::Vowel,
-                "c" => Token::Conso,
+                "v" => Token::IsVowel,
+                "c" => Token::IsConso,
                 "_" => Token::IsLower,
                 "^" => Token::IsUpper,
-                "l" => Token::ToLower,
-                "u" => Token::ToUpper,
                 "@" => Token::Rotate,
                 _ => unreachable!(),
             },
         ))
-    } else if let Ok((rest, parsed)) = single_delim_res {
+    } else if let Ok((rest, parsed)) = map_res {
         Ok((
             rest,
             match parsed {
-                "v" => Token::Filter(Filter::Vowel),
-                "c" => Token::Filter(Filter::Conso),
-                "_" => Token::Filter(Filter::Lower),
-                "^" => Token::Filter(Filter::Upper),
+                "_" => Token::Map(Map::Lower),
+                "^" => Token::Map(Map::Upper),
+                "%" => Token::Map(Map::Swap),
                 _ => unreachable!(),
             },
         ))
-    } else if let Ok((rest, (first, second))) = double_res {
+    } else if let Ok((rest, parsed)) = filter_res {
+        Ok((
+            rest,
+            match parsed {
+                "v" => Token::Filter(Check::Vowel),
+                "c" => Token::Filter(Check::Conso),
+                "_" => Token::Filter(Check::Lower),
+                "^" => Token::Filter(Check::Upper),
+                _ => unreachable!(),
+            },
+        ))
+    } else if let Ok((rest, (first, second))) = slice_res {
         Ok((rest, Token::Slice(first.parse().ok(), second.parse().ok())))
     } else {
         Err(Error::unknown(input.to_owned()))
@@ -265,32 +300,37 @@ mod test {
         assert_eq!(next_token(">").unwrap(), ("", Token::Out));
         assert_eq!(next_token("/").unwrap(), ("", Token::Split));
         assert_eq!(next_token(".").unwrap(), ("", Token::Join));
-        assert_eq!(next_token("v").unwrap(), ("", Token::Vowel));
-        assert_eq!(next_token("c").unwrap(), ("", Token::Conso));
-        assert_eq!(next_token("l").unwrap(), ("", Token::ToLower));
-        assert_eq!(next_token("u").unwrap(), ("", Token::ToUpper));
+        assert_eq!(next_token("v").unwrap(), ("", Token::IsVowel));
+        assert_eq!(next_token("c").unwrap(), ("", Token::IsConso));
         assert_eq!(next_token("_").unwrap(), ("", Token::IsLower));
         assert_eq!(next_token("^").unwrap(), ("", Token::IsUpper));
         assert_eq!(next_token("@").unwrap(), ("", Token::Rotate));
     }
 
     #[test]
+    fn map() {
+        assert_eq!(next_token("{_}").unwrap(), ("", Token::Map(Map::Lower)));
+        assert_eq!(next_token("{^}").unwrap(), ("", Token::Map(Map::Upper)));
+        assert_eq!(next_token("{%}").unwrap(), ("", Token::Map(Map::Swap)));
+    }
+
+    #[test]
     fn filter() {
         assert_eq!(
             next_token("[v]").unwrap(),
-            ("", Token::Filter(Filter::Vowel))
+            ("", Token::Filter(Check::Vowel))
         );
         assert_eq!(
             next_token("[c]").unwrap(),
-            ("", Token::Filter(Filter::Conso))
+            ("", Token::Filter(Check::Conso))
         );
         assert_eq!(
             next_token("[_]").unwrap(),
-            ("", Token::Filter(Filter::Lower))
+            ("", Token::Filter(Check::Lower))
         );
         assert_eq!(
             next_token("[^]").unwrap(),
-            ("", Token::Filter(Filter::Upper))
+            ("", Token::Filter(Check::Upper))
         );
     }
 
