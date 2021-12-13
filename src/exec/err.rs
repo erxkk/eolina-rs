@@ -253,7 +253,7 @@ impl Display for ErrorKind {
                     write!(f, "arg mismatch: expected any of")?;
 
                     let mut iter = expected.iter();
-                    write!(f, " `{}`", iter.next().unwrap())?;
+                    write!(f, " `{}`", iter.next().expect("no expected args given"))?;
 
                     for expected in iter {
                         write!(f, ", `{}`", expected)?;

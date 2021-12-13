@@ -46,7 +46,9 @@ impl Iterator for TokenIter {
                     self.index = if rest.is_empty() {
                         self.input.len()
                     } else {
-                        self.input.find(rest).unwrap()
+                        self.input.find(rest).unwrap_or_else(|| {
+                            panic!("next_token returned invalid rest slice `{}`", rest)
+                        })
                     };
 
                     self.error = false;

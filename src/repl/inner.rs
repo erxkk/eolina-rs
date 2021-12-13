@@ -32,7 +32,9 @@ impl ReplContext {
     pub fn run(&mut self) -> ! {
         'outer: loop {
             print!(">>> ");
-            io::stdout().flush().unwrap();
+            io::stdout()
+                .flush()
+                .expect("unrecoverable error during flushing");
 
             let mut input = String::new();
             io::stdin()
