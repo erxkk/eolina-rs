@@ -276,12 +276,10 @@ pub fn slice(input: Value, range: EolinaRange) -> Result<Value, Error> {
 
     // check if valid
     let abs_check_map = |abs| {
-        if abs < 0 {
-            Err(abs)
-        } else if abs > len as isize {
-            Err(abs)
-        } else {
+        if (0..=len as isize).contains(&abs) {
             Ok(abs as usize)
+        } else {
+            Err(abs)
         }
     };
 

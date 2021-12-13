@@ -205,9 +205,9 @@ pub enum EolinaRangeBound {
 impl EolinaRangeBound {
     ///
     /// Converts this [`EolinaRangeBound`] into an [`isize`], where a negative
-    /// value denotes a relative index.
+    /// value denotes an index relative from the back.
     ///
-    pub fn to_isize(&self) -> isize {
+    pub fn as_isize(&self) -> isize {
         match self {
             EolinaRangeBound::Start(idx) => *idx as isize,
             EolinaRangeBound::End(idx) => -(*idx as isize),
@@ -239,9 +239,13 @@ impl From<isize> for EolinaRangeBound {
     }
 }
 
-impl Into<isize> for EolinaRangeBound {
-    fn into(self) -> isize {
-        self.to_isize()
+impl From<EolinaRangeBound> for isize {
+    ///
+    /// Creates a new [`isize`] from the given [`EolinaRangeBound`], where
+    /// a negative value denotes an index relative from the back.
+    ///
+    fn from(bound: EolinaRangeBound) -> isize {
+        bound.as_isize()
     }
 }
 

@@ -308,13 +308,13 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
                 first.map(|(sign, num)| {
                     (
                         sign.is_some(),
-                        num.parse().ok().expect("combinator must fail"),
+                        num.parse().expect("combinator must fail"),
                     )
                 }),
                 second.map(|(sign, num)| {
                     (
                         sign.is_some(),
-                        num.parse().ok().expect("combinator must fail"),
+                        num.parse().expect("combinator must fail"),
                     )
                 }),
             )),
