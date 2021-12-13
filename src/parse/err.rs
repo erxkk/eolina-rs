@@ -4,6 +4,7 @@ use std::fmt::{self, Display, Formatter};
 /// Represents an error during tokenization.
 ///
 #[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct Error {
     slice: String,
     kind: ErrorKind,
@@ -30,16 +31,6 @@ impl Error {
         }
     }
 }
-
-#[cfg(test)]
-impl PartialEq for Error {
-    fn eq(&self, other: &Self) -> bool {
-        self.kind == other.kind && self.slice == other.slice
-    }
-}
-
-#[cfg(test)]
-impl Eq for Error {}
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

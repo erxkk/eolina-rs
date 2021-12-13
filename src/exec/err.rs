@@ -12,6 +12,7 @@ use std::{
 /// Represents an error taht can occur during execution of a program.
 ///
 #[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct Error {
     repr: ErrorKind,
 }
@@ -108,16 +109,6 @@ impl From<parse::Error> for Error {
         Self::parse(inner)
     }
 }
-
-#[cfg(test)]
-impl PartialEq for Error {
-    fn eq(&self, other: &Self) -> bool {
-        self.repr == other.repr
-    }
-}
-
-#[cfg(test)]
-impl Eq for Error {}
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
@@ -216,7 +207,10 @@ impl Display for ErrorKind {
                 )
             }
             Self::SliceOutOfRange(given, translated, length) => {
-                let start: isize = translated.start.unwrap_or(EolinaRangeBound::Start(0)).into();
+                let start: isize = translated
+                    .start
+                    .unwrap_or(EolinaRangeBound::Start(0))
+                    .into();
                 let end: isize = translated
                     .end
                     .unwrap_or(EolinaRangeBound::Start(*length))
