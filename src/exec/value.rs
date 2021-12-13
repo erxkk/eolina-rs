@@ -50,7 +50,7 @@ impl Value {
     pub fn unwrap_string_vec(self) -> Result<Vec<String>, Error> {
         match self {
             Self::StringVec(inner) => Ok(inner),
-            x => Err(Error::arg_mismatch(&[ValueKind::String], x.kind())),
+            x => Err(Error::arg_mismatch(&[ValueKind::StringVec], x.kind())),
         }
     }
 
@@ -60,7 +60,7 @@ impl Value {
     pub fn unwrap_bool(self) -> Result<bool, Error> {
         match self {
             Self::Bool(inner) => Ok(inner),
-            x => Err(Error::arg_mismatch(&[ValueKind::String], x.kind())),
+            x => Err(Error::arg_mismatch(&[ValueKind::Bool], x.kind())),
         }
     }
 

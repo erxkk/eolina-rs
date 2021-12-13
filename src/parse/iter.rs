@@ -78,7 +78,7 @@ mod test {
                 Token::In,
                 Token::Out,
                 Token::Split,
-                Token::Slice(None, None)
+                Token::Slice((..).into())
             ]
         );
     }

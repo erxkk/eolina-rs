@@ -161,9 +161,9 @@ impl Executor {
                 let ret = func::filter(val, filter)?;
                 self.values.push_back(ret);
             }
-            Token::Slice(lower, upper) => {
+            Token::Slice(range) => {
                 let val = self.pop_queue()?;
-                let ret = func::slice(val, lower, upper)?;
+                let ret = func::slice(val, range)?;
                 self.values.push_back(ret);
             }
         }

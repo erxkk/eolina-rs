@@ -1,3 +1,5 @@
+use crate::helper::EolinaRange;
+
 use super::Error;
 use nom::{
     branch::alt,
@@ -150,7 +152,7 @@ pub enum Token {
     ///
     /// The slice token `|x.x|` where `x` are empty or [`isize`].
     ///
-    Slice(Option<isize>, Option<isize>),
+    Slice(EolinaRange),
 }
 
 impl Display for Token {
@@ -169,18 +171,7 @@ impl Display for Token {
             Self::IsLower => f.write_str("_"),
             Self::Map(map) => map.fmt(f),
             Self::Filter(filter) => filter.fmt(f),
-            Self::Slice(lower, upper) => {
-                write!(
-                    f,
-                    "|{}.{}|",
-                    lower
-                        .map(|num| num.to_string())
-                        .unwrap_or_else(|| "".to_owned()),
-                    upper
-                        .map(|num| num.to_string())
-                        .unwrap_or_else(|| "".to_owned())
-                )
-            }
+            Self::Slice(range) => range.fmt(f),
         }
     }
 }
@@ -278,7 +269,7 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
                 "c" => Token::IsConso,
                 "_" => Token::IsLower,
                 "^" => Token::IsUpper,
-                _ => unreachable!(),
+                _ => unimplemented!("missing single branches"),
             },
         ))
     } else if let Ok((rest, (first, second))) = double_res {
@@ -296,7 +287,7 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
                 "_" => Token::Map(Map::Lower),
                 "^" => Token::Map(Map::Upper),
                 "%" => Token::Map(Map::Swap),
-                _ => unreachable!(),
+                _ => unimplemented!("missing map branches"),
             },
         ))
     } else if let Ok((rest, parsed)) = filter_res {
@@ -307,28 +298,26 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
                 "c" => Token::Filter(Check::Conso),
                 "_" => Token::Filter(Check::Lower),
                 "^" => Token::Filter(Check::Upper),
-                _ => unreachable!(),
+                _ => unimplemented!("missing filter branches"),
             },
         ))
     } else if let Ok((rest, (first, second))) = slice_res {
         Ok((
             rest,
-            Token::Slice(
-                first
-                    .map(|(sign, num)| {
-                        num.parse::<isize>()
-                            .ok()
-                            .map(|num| num * sign.map(|_| -1).unwrap_or(1))
-                    })
-                    .unwrap_or_default(),
-                second
-                    .map(|(sign, num)| {
-                        num.parse::<isize>()
-                            .ok()
-                            .map(|num| num * sign.map(|_| -1).unwrap_or(1))
-                    })
-                    .unwrap_or_default(),
-            ),
+            Token::Slice(EolinaRange::from_components(
+                first.map(|(sign, num)| {
+                    (
+                        sign.is_some(),
+                        num.parse().ok().expect("combinator must fail"),
+                    )
+                }),
+                second.map(|(sign, num)| {
+                    (
+                        sign.is_some(),
+                        num.parse().ok().expect("combinator must fail"),
+                    )
+                }),
+            )),
         ))
     } else {
         Err(Error::unknown(input.to_owned()))
@@ -386,19 +375,35 @@ mod test {
     }
 
     #[test]
-    fn slice() {
-        assert_eq!(next_token("|.|").unwrap(), ("", Token::Slice(None, None)));
+    fn slice_pos() {
+        assert_eq!(next_token("|.|").unwrap(), ("", Token::Slice((..).into())));
         assert_eq!(
             next_token("|.42|").unwrap(),
-            ("", Token::Slice(None, Some(42)))
+            ("", Token::Slice((..42).into()))
         );
         assert_eq!(
             next_token("|42.|").unwrap(),
-            ("", Token::Slice(Some(42), None))
+            ("", Token::Slice((42..).into()))
         );
         assert_eq!(
             next_token("|42.42|").unwrap(),
-            ("", Token::Slice(Some(42), Some(42)))
+            ("", Token::Slice((42..42).into()))
+        );
+    }
+
+    #[test]
+    fn slice_neg() {
+        assert_eq!(
+            next_token("|.-42|").unwrap(),
+            ("", Token::Slice((..-42).into()))
+        );
+        assert_eq!(
+            next_token("|-42.|").unwrap(),
+            ("", Token::Slice((-42..).into()))
+        );
+        assert_eq!(
+            next_token("|-42.-42|").unwrap(),
+            ("", Token::Slice((-42..-42).into()))
         );
     }
 
@@ -407,6 +412,6 @@ mod test {
         assert_eq!(next_token("<>/|.|").unwrap(), (">/|.|", Token::In));
         assert_eq!(next_token(">/|.|").unwrap(), ("/|.|", Token::Out));
         assert_eq!(next_token("/|.|").unwrap(), ("|.|", Token::Split));
-        assert_eq!(next_token("|.|").unwrap(), ("", Token::Slice(None, None)));
+        assert_eq!(next_token("|.|").unwrap(), ("", Token::Slice((..).into())));
     }
 }

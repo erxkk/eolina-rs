@@ -31,6 +31,16 @@ impl Error {
     }
 }
 
+#[cfg(test)]
+impl PartialEq for Error {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind && self.slice == other.slice
+    }
+}
+
+#[cfg(test)]
+impl Eq for Error {}
+
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.kind {
@@ -43,6 +53,7 @@ impl Display for Error {
 ///
 /// Represents an error during tokenization.
 ///
+#[non_exhaustive]
 #[derive(Debug)]
 enum ErrorKind {
     ///
@@ -55,6 +66,19 @@ enum ErrorKind {
     ///
     Unknown,
 }
+
+#[cfg(test)]
+impl PartialEq for ErrorKind {
+    fn eq(&self, other: &Self) -> bool {
+        matches!(
+            (self, other),
+            (ErrorKind::Empty, ErrorKind::Empty) | (ErrorKind::Unknown, ErrorKind::Unknown)
+        )
+    }
+}
+
+#[cfg(test)]
+impl Eq for ErrorKind {}
 
 impl Display for ErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

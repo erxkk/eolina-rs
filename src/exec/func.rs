@@ -1,5 +1,5 @@
 use super::{Error, Value, ValueKind};
-use crate::helper::AsciiExt;
+use crate::helper::{AsciiExt, EolinaRange, EolinaRangeBound};
 use crate::parse::{CheckToken, MapToken};
 
 ///
@@ -72,11 +72,11 @@ pub fn concat(input1: Value, input2: Value) -> Result<Value, Error> {
             vec1
         })),
         (x, Value::Bool(_)) => Err(Error::arg_mismatch(
-            &[ValueKind::StringVec, ValueKind::String],
+            &[ValueKind::String, ValueKind::StringVec],
             x.kind(),
         )),
         (Value::Bool(_), x) => Err(Error::arg_mismatch(
-            &[ValueKind::StringVec, ValueKind::String],
+            &[ValueKind::String, ValueKind::StringVec],
             x.kind(),
         )),
         x => Err(Error::mismatch(x.0.kind(), x.1.kind())),
@@ -164,7 +164,7 @@ fn __check_all(input: Value, check: impl Fn(&String) -> bool) -> Result<Value, E
         Value::String(string) => Ok(Value::Bool(check(&string))),
         Value::StringVec(vec) => Ok(Value::Bool(vec.into_iter().all(|string| check(&string)))),
         x => Err(Error::arg_mismatch(
-            &[ValueKind::StringVec, ValueKind::String],
+            &[ValueKind::String, ValueKind::StringVec],
             x.kind(),
         )),
     }
@@ -192,7 +192,7 @@ pub fn map(input: Value, map: MapToken) -> Result<Value, Error> {
             vec.into_iter().map(|string| __map(string, map)).collect(),
         )),
         x => Err(Error::arg_mismatch(
-            &[ValueKind::StringVec, ValueKind::String],
+            &[ValueKind::String, ValueKind::StringVec],
             x.kind(),
         )),
     }
@@ -235,7 +235,7 @@ pub fn filter(input: Value, check: CheckToken) -> Result<Value, Error> {
                 .collect(),
         )),
         x => Err(Error::arg_mismatch(
-            &[ValueKind::StringVec, ValueKind::String],
+            &[ValueKind::String, ValueKind::StringVec],
             x.kind(),
         )),
     }
@@ -265,26 +265,53 @@ fn __filter<T: AsciiExt>(val: &T, check: CheckToken) -> bool {
 /// * [`Err(error)`]
 ///   * `error` contains an arg type mismatch [`Error`]
 ///
-pub fn slice(input: Value, lower: Option<isize>, upper: Option<isize>) -> Result<Value, Error> {
+pub fn slice(input: Value, range: EolinaRange) -> Result<Value, Error> {
     let len = input.unwrap_len()?;
-    let lower = lower.map(|num| if num.is_negative() { len as isize + num } else { num } as usize);
-    let upper = upper.map(|num| if num.is_negative() { len as isize + num } else { num } as usize);
+
+    // map to absolute
+    let idx_map = |idx| match idx {
+        EolinaRangeBound::Start(idx) => idx as isize,
+        EolinaRangeBound::End(idx) => len as isize - idx as isize,
+    };
+
+    // check if valid
+    let abs_check_map = |abs| {
+        if abs < 0 {
+            Err(abs)
+        } else if abs > len as isize {
+            Err(abs)
+        } else {
+            Ok(abs as usize)
+        }
+    };
+
+    // map to absolute unsigned
+    let abs_lower = range.start.map(idx_map).map(abs_check_map).unwrap_or(Ok(0));
+    let abs_upper = range.end.map(idx_map).map(abs_check_map).unwrap_or(Ok(len));
+
+    // handle error cases
+    let (lower, upper) = match (abs_lower, abs_upper) {
+        (Ok(ok), Err(err)) => return Err(Error::slice_oor(range, ok as isize..err, len)),
+        (Err(err), Ok(ok)) => return Err(Error::slice_oor(range, err..ok as isize, len)),
+        (Err(err_l), Err(err_u)) => return Err(Error::slice_oor(range, err_l..err_u, len)),
+        (Ok(ok_l), Ok(ok_u)) => {
+            if ok_l > ok_u {
+                return Err(Error::slice_incompat(
+                    range,
+                    ok_l as isize..ok_u as isize,
+                    len,
+                ));
+            } else {
+                (ok_l, ok_u)
+            }
+        }
+    };
 
     match input {
-        Value::String(string) => Ok(Value::String(match (lower, upper) {
-            (Some(l), Some(u)) => string[l..u].to_owned(),
-            (Some(l), None) => string[l..].to_owned(),
-            (None, Some(u)) => string[..u].to_owned(),
-            _ => string,
-        })),
-        Value::StringVec(vec) => Ok(Value::StringVec(match (lower, upper) {
-            (Some(l), Some(u)) => vec[l..u].to_owned(),
-            (Some(l), None) => vec[l..].to_owned(),
-            (None, Some(u)) => vec[..u].to_owned(),
-            _ => vec,
-        })),
+        Value::String(string) => Ok(Value::String(string[lower..upper].to_owned())),
+        Value::StringVec(vec) => Ok(Value::StringVec(vec[lower..upper].to_owned())),
         x => Err(Error::arg_mismatch(
-            &[ValueKind::StringVec, ValueKind::String],
+            &[ValueKind::String, ValueKind::StringVec],
             x.kind(),
         )),
     }
@@ -300,6 +327,10 @@ mod test {
             super::split(Value::String("Abc".to_owned())).unwrap(),
             Value::StringVec(vec!["A".to_owned(), "b".to_owned(), "c".to_owned()])
         );
+        assert_eq!(
+            super::split(Value::Bool(true)).unwrap_err(),
+            Error::arg_mismatch(&[ValueKind::String], ValueKind::Bool)
+        );
     }
 
     #[test]
@@ -312,6 +343,10 @@ mod test {
             ]))
             .unwrap(),
             Value::String("Abc".to_owned())
+        );
+        assert_eq!(
+            super::join(Value::Bool(true)).unwrap_err(),
+            Error::arg_mismatch(&[ValueKind::StringVec], ValueKind::Bool)
         );
     }
 
@@ -326,6 +361,10 @@ mod test {
             super::is_conso(Value::String("aei".to_owned())).unwrap(),
             Value::Bool(false)
         );
+        assert_eq!(
+            super::is_conso(Value::Bool(true)).unwrap_err(),
+            Error::arg_mismatch(&[ValueKind::String, ValueKind::StringVec], ValueKind::Bool)
+        );
     }
 
     #[test]
@@ -337,6 +376,10 @@ mod test {
         assert_eq!(
             super::is_vowel(Value::String("aei".to_owned())).unwrap(),
             Value::Bool(true)
+        );
+        assert_eq!(
+            super::is_vowel(Value::Bool(true)).unwrap_err(),
+            Error::arg_mismatch(&[ValueKind::String, ValueKind::StringVec], ValueKind::Bool)
         );
     }
 
@@ -350,6 +393,10 @@ mod test {
             super::is_lower(Value::String("abc".to_owned())).unwrap(),
             Value::Bool(true)
         );
+        assert_eq!(
+            super::is_lower(Value::Bool(true)).unwrap_err(),
+            Error::arg_mismatch(&[ValueKind::String, ValueKind::StringVec], ValueKind::Bool)
+        );
     }
 
     #[test]
@@ -362,17 +409,21 @@ mod test {
             super::is_upper(Value::String("abc".to_owned())).unwrap(),
             Value::Bool(false)
         );
+        assert_eq!(
+            super::is_upper(Value::Bool(true)).unwrap_err(),
+            Error::arg_mismatch(&[ValueKind::String, ValueKind::StringVec], ValueKind::Bool)
+        );
     }
 
     #[test]
     fn map() {
         assert_eq!(
-            super::map(Value::String("abC".to_owned()), MapToken::Upper).unwrap(),
-            Value::String("ABC".to_owned())
-        );
-        assert_eq!(
             super::map(Value::String("aBc".to_owned()), MapToken::Lower).unwrap(),
             Value::String("abc".to_owned())
+        );
+        assert_eq!(
+            super::map(Value::String("abC".to_owned()), MapToken::Upper).unwrap(),
+            Value::String("ABC".to_owned())
         );
         assert_eq!(
             super::map(
@@ -381,6 +432,10 @@ mod test {
             )
             .unwrap(),
             Value::StringVec(vec!["aBc".to_owned(), "DeF".to_owned()])
+        );
+        assert_eq!(
+            super::map(Value::Bool(true), MapToken::Lower).unwrap_err(),
+            Error::arg_mismatch(&[ValueKind::String, ValueKind::StringVec], ValueKind::Bool)
         );
     }
 
@@ -410,30 +465,83 @@ mod test {
             .unwrap(),
             Value::StringVec(vec!["abc".to_owned()])
         );
+        assert_eq!(
+            super::filter(Value::Bool(true), CheckToken::Vowel).unwrap_err(),
+            Error::arg_mismatch(&[ValueKind::String, ValueKind::StringVec], ValueKind::Bool)
+        );
     }
 
     #[test]
-    fn slice() {
+    fn slice_pos() {
         assert_eq!(
-            super::slice(Value::String("abcdefg".to_owned()), None, None).unwrap(),
+            super::slice(Value::String("abcdefg".to_owned()), (..).into()).unwrap(),
             Value::String("abcdefg".to_owned())
         );
         assert_eq!(
-            super::slice(Value::String("abcdefg".to_owned()), Some(3), None).unwrap(),
+            super::slice(Value::String("abcdefg".to_owned()), (3..).into()).unwrap(),
             Value::String("defg".to_owned())
         );
         assert_eq!(
-            super::slice(Value::String("abcdefg".to_owned()), None, Some(3)).unwrap(),
+            super::slice(Value::String("abcdefg".to_owned()), (..3).into()).unwrap(),
             Value::String("abc".to_owned())
         );
 
         assert_eq!(
-            super::slice(Value::String("abcdefg".to_owned()), Some(-3), None).unwrap(),
+            super::slice(Value::String("abcdefg".to_owned()), (3..2).into()).unwrap_err(),
+            Error::slice_incompat(3..2, 3..2, 7)
+        );
+        assert_eq!(
+            super::slice(Value::String("abcdefg".to_owned()), (8..).into()).unwrap_err(),
+            Error::slice_oor(8.., 8..7, 7)
+        );
+        assert_eq!(
+            super::slice(Value::String("abcdefg".to_owned()), (..8).into()).unwrap_err(),
+            Error::slice_oor(..8, 0..8, 7)
+        );
+    }
+
+    #[test]
+    fn slice_neg() {
+        assert_eq!(
+            super::slice(Value::String("abcdefg".to_owned()), (-3..).into()).unwrap(),
             Value::String("efg".to_owned())
         );
         assert_eq!(
-            super::slice(Value::String("abcdefg".to_owned()), None, Some(-3)).unwrap(),
+            super::slice(Value::String("abcdefg".to_owned()), (..-3).into()).unwrap(),
             Value::String("abcd".to_owned())
+        );
+
+        assert_eq!(
+            super::slice(Value::String("abcdefg".to_owned()), (-2..-3).into()).unwrap_err(),
+            Error::slice_incompat(-2..-3, 5..4, 7)
+        );
+        assert_eq!(
+            super::slice(Value::String("abcdefg".to_owned()), (-8..).into()).unwrap_err(),
+            Error::slice_oor(-8.., -1..7, 7)
+        );
+        assert_eq!(
+            super::slice(Value::String("abcdefg".to_owned()), (..-8).into()).unwrap_err(),
+            Error::slice_oor(..-8, 0..-1, 7)
+        );
+    }
+
+    #[test]
+    fn slice_neg_pos() {
+        assert_eq!(
+            super::slice(Value::String("abcdefg".to_owned()), (-3..7).into()).unwrap(),
+            Value::String("efg".to_owned())
+        );
+        assert_eq!(
+            super::slice(Value::String("abcdefg".to_owned()), (3..-3).into()).unwrap(),
+            Value::String("d".to_owned())
+        );
+        assert_eq!(
+            super::slice(Value::String("abcdefg".to_owned()), (-8..3).into()).unwrap_err(),
+            Error::slice_oor(-8..3, -1..3, 7)
+        );
+        assert_eq!(
+            super::slice(Value::String("abcdefg".to_owned()), (3..-8).into()).unwrap_err(),
+            Error::slice_oor(3..-8, 3..-1, 7)
         );
     }
 }
