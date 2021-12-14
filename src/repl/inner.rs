@@ -3,7 +3,6 @@ use crate::{exec::Executor, io::Io, io::Kind, io::Mode};
 use std::{collections::HashMap, process};
 
 // TODO: write tests
-// TODO: allow spaces in programs when parsing `!s` (parse program arg as remainder)
 
 ///
 /// A repl context, used for storing and executing programs.
@@ -149,18 +148,20 @@ impl Context {
             x => match x.as_bytes() {
                 [b's', b' ', ..] => {
                     let x = &x[2..];
-                    let mut iter = x.split_ascii_whitespace();
-
-                    let name = iter
-                        .next()
-                        .ok_or_else(|| Error::missing_param("name", 0))?
-                        .to_owned();
-
-                    let program = iter
-                        .next()
-                        .ok_or_else(|| Error::missing_param("program", 1))?;
-                    self.execs.insert(name, Executor::new(program.to_owned()));
-                    Ok(())
+                    if x.is_empty()
+                        || x.as_bytes()
+                            .iter()
+                            .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
+                    {
+                        Err(Error::missing_param("name", 0))
+                    } else if let Some(pos) = x.find(' ') {
+                        let (name, program) = x.split_at(pos);
+                        self.execs
+                            .insert(name.to_owned(), Executor::new(program[1..].to_owned()));
+                        Ok(())
+                    } else {
+                        Err(Error::missing_param("program", 1))
+                    }
                 }
                 [b'c', b' ', ..] => {
                     let x = &x[2..];
