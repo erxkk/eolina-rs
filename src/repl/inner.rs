@@ -1,24 +1,33 @@
-use crate::exec::Executor;
-use std::{
-    collections::HashMap,
-    io::{self, Write},
-    process,
-    rc::Rc,
-};
+use super::Error;
+use crate::{exec::Executor, io::Io, io::Kind, io::Mode};
+use std::{collections::HashMap, process, rc::Rc, sync::Mutex};
+
+// TODO: write tests
+// TODO: allow spaces in programs when parsing `!s` (parse program arg as remainder)
 
 ///
 /// A repl context, used for storing and executing programs.
 ///
-pub struct ReplContext {
+pub struct Context {
+    io: Io,
+    exec_io: Rc<Mutex<Io>>,
     execs: HashMap<String, Executor>,
 }
 
-impl ReplContext {
+impl Context {
     ///
-    /// Creates a new [`ReplContext`].
+    /// Creates a new [`Context`], with [`Mode::Colorful`].
     ///
     pub fn new() -> Self {
         Self {
+            io: Io::with(Mode::Colorful, None, None, "[".to_owned(), "]: ".to_owned()),
+            exec_io: Rc::new(Mutex::new(Io::with(
+                Mode::Colorful,
+                "[".to_owned(),
+                "]: ".to_owned(),
+                "[".to_owned(),
+                "]: ".to_owned(),
+            ))),
             execs: HashMap::new(),
         }
     }
@@ -27,19 +36,12 @@ impl ReplContext {
     /// Continously runs this repl context until the program is prompted to exit.
     ///
     /// ### Returns
+    ///
     /// This function does not return.
     ///
     pub fn run(&mut self) -> ! {
         'outer: loop {
-            print!(">>> ");
-            io::stdout()
-                .flush()
-                .expect("unrecoverable error during flushing");
-
-            let mut input = String::new();
-            io::stdin()
-                .read_line(&mut input)
-                .expect("unrecoverable error during reading");
+            let mut input = self.io.read_expect(">>> ", None);
 
             // truncate the '\n'
             if input.ends_with('\n') {
@@ -55,20 +57,40 @@ impl ReplContext {
                 match self.command(input) {
                     Ok(_) => {}
                     Err(err) => {
-                        println!("    error: {}", err);
+                        self.io.write_expect(Kind::Error, err, None);
                     }
                 }
                 continue 'outer;
             }
 
-            'inner: for res in Executor::new(Rc::new(input)) {
-                if let Some(err) = res.err() {
-                    eprintln!("    error: {}", err);
-                    break 'inner;
-                }
+            let mut exec = Executor::new(Rc::new(input));
+            if let Err(err) = self.run_exec(&mut exec) {
+                self.io.write_expect(Kind::Error, err, exec.input());
             }
         }
     }
+
+    ///
+    /// Executes and then resets a given [`Executor`] for this context.
+    ///
+    /// ### Returns
+    ///
+    /// * [`Ok(())`] if the executor was executed successfully
+    /// * [`Err(string)`] if the executor could not be executed or reset
+    ///   * `string` contains the error reason
+    ///
+    fn run_exec(&self, exec: &mut Executor) -> Result<(), Error> {
+        for res in exec.iter(Rc::clone(&self.exec_io)) {
+            if let Some(err) = res.err() {
+                return Err(Error::exec(err));
+            }
+        }
+
+        exec.reset()?;
+        Ok(())
+    }
+
+    // TODO: clean up command handling
 
     ///
     /// Executes a command for this context.
@@ -79,17 +101,31 @@ impl ReplContext {
     /// * [`Err(string)`] if the command could not be executed
     ///   * `string` contains the error reason
     ///
-    fn command(&mut self, cmd: &str) -> Result<(), String> {
+    fn command(&mut self, cmd: &str) -> Result<(), Error> {
         match cmd {
             "exit" | "quit" | "q" => process::exit(0),
             "help" | "h" | "?" => {
-                println!(
-                    r#"    exit | quit | q # exits the program
-    help | h | ?    # prints all commands
-    s               # saves a program `!s sort <*[^][_]~>`
-    c               # calls a program `!s sort`
-    r               # removes a program `!r sort`"#
+                // TODO: see multiline handling in crate::io
+                self.io
+                    .write_expect(Kind::Output, "exit | quit | q    exits the program", None);
+                self.io
+                    .write_expect(Kind::Output, "help | h | ?       prints all commands", None);
+                self.io.write_expect(
+                    Kind::Output,
+                    "s                  saves a program `!s sort <*[^][_]~>`",
+                    None,
                 );
+                self.io.write_expect(
+                    Kind::Output,
+                    "c                  calls a program `!s sort`",
+                    None,
+                );
+                self.io.write_expect(
+                    Kind::Output,
+                    "r                  removes a program `!r sort`",
+                    None,
+                );
+
                 Ok(())
             }
             "list" | "ls" => {
@@ -99,10 +135,14 @@ impl ReplContext {
                 Ok(())
             }
             "example" | "eg" => {
-                println!(
-                    r#"    <>          # echo program
-    <*>>        # duplicate echo
-    <*[^][_]~>  # orders by case, upper first"#
+                self.io
+                    .write_expect(Kind::Output, "    <>          # echo program", None);
+                self.io
+                    .write_expect(Kind::Output, "    <*>>        # duplicate echo", None);
+                self.io.write_expect(
+                    Kind::Output,
+                    "    <*[^][_]~>  # orders by case, upper first",
+                    None,
                 );
                 Ok(())
             }
@@ -113,10 +153,12 @@ impl ReplContext {
 
                     let name = iter
                         .next()
-                        .ok_or_else(|| "missing program name".to_owned())?
+                        .ok_or_else(|| Error::missing_param("name", 0))?
                         .to_owned();
 
-                    let program = iter.next().ok_or_else(|| "missing program".to_owned())?;
+                    let program = iter
+                        .next()
+                        .ok_or_else(|| Error::missing_param("program", 1))?;
                     let program = Rc::new(program.to_owned());
                     self.execs.insert(name, Executor::new(Rc::clone(&program)));
                     Ok(())
@@ -125,44 +167,39 @@ impl ReplContext {
                     let x = &x[2..];
                     let mut iter = x.split_ascii_whitespace();
 
-                    let name = iter
-                        .next()
-                        .ok_or_else(|| "missing program name".to_owned())?;
+                    let name = iter.next().ok_or_else(|| Error::missing_param("name", 0))?;
 
-                    match self.execs.get_mut(name) {
-                        Some(exec) => {
-                            println!("    running: `{}`: {}", name, exec.input());
+                    // move out executor to avoid doublemutable borrow
+                    match self.execs.remove(name) {
+                        Some(mut exec) => {
+                            self.io.write_expect(
+                                Kind::Info,
+                                format!("running: `{}`", exec.input()),
+                                None,
+                            );
 
-                            for res in exec.by_ref() {
-                                if let Some(err) = res.err() {
-                                    eprintln!("error: {}", err);
-                                    break;
-                                }
-                            }
-                            exec.reset()
-                                .map_err(|err| format!("error resetting: {}", err))?;
-                            Ok(())
+                            let res = self.run_exec(&mut exec);
+                            self.execs.insert(name.to_string(), exec);
+                            res
                         }
-                        None => Err(format!("unknown program: `{}`", x)),
+                        None => Err(Error::unknown_program(x.to_owned())),
                     }
                 }
                 [b'r', b' ', ..] => {
                     let x = &x[2..];
                     let mut iter = x.split_ascii_whitespace();
 
-                    let name = iter
-                        .next()
-                        .ok_or_else(|| "missing program name".to_owned())?;
+                    let name = iter.next().ok_or_else(|| Error::missing_param("name", 0))?;
 
                     match self.execs.remove(name) {
                         Some(exec) => {
                             println!("removed program: `{}`: {}", name, exec.input());
                             Ok(())
                         }
-                        None => Err(format!("unknown program: `{}`", x)),
+                        None => Err(Error::unknown_program(x.to_owned())),
                     }
                 }
-                _ => Err(format!("unknown command: `{}`", x)),
+                _ => Err(Error::unknown_command(x.to_owned())),
             },
         }
     }

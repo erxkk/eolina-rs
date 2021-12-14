@@ -1,10 +1,9 @@
 use super::{func, Error, Value};
-use crate::parse::{Token, TokenIter};
-use std::{
-    collections::VecDeque,
-    io::{self, Write},
-    rc::Rc,
+use crate::{
+    io::{Io, Kind, Mode},
+    parse::{Token, TokenIter},
 };
+use std::{collections::VecDeque, rc::Rc, sync::Mutex};
 
 ///
 /// Lazily yields tokens from a given input and interprets them
@@ -59,9 +58,10 @@ impl Executor {
     /// * [`Err(str)`] if the executor could not be reset
     ///   * `str` contains the error reason
     ///
-    pub fn reset(&mut self) -> Result<(), String> {
+    pub fn reset(&mut self) -> Result<(), Error> {
+        // TODO: remove this error? this should technically never happen
         if self.tokens.error() {
-            Err(format!("the program must be malformed `{}`", self.input))
+            Err(Error::malformed())
         } else {
             self.tokens = TokenIter::new(Rc::clone(&self.input));
             self.values.clear();
@@ -86,14 +86,13 @@ impl Executor {
     ///
     /// Advances to the next token.
     ///
-    fn next_token(&mut self, token: Token) -> Result<(), Error> {
+    fn next_token(&mut self, io: &Rc<Mutex<Io>>, token: Token) -> Result<(), Error> {
         match token {
             Token::In => {
-                let mut val = String::new();
-                print!(" in: ");
-                io::stdout().flush()?;
-
-                io::stdin().read_line(&mut val)?;
+                let mut val = io
+                    .lock()
+                    .expect("mutex poisened")
+                    .read_expect(" in", self.input());
 
                 // truncate the '\n'
                 if val.ends_with('\n') {
@@ -104,7 +103,9 @@ impl Executor {
             }
             Token::Out => {
                 let val = self.pop_queue()?;
-                println!("out: {}", val);
+                io.lock()
+                    .expect("mutex poisened")
+                    .write_expect(Kind::Output, val, self.input());
             }
             Token::Rotate(num) => {
                 self.values.rotate_left(num);
@@ -169,9 +170,34 @@ impl Executor {
         }
         Ok(())
     }
+
+    //TODO: doc
+    pub fn iter(&mut self, io: impl Into<Option<Rc<Mutex<Io>>>>) -> ExecutorIter<'_> {
+        ExecutorIter::new(self, io)
+    }
 }
 
-impl Iterator for Executor {
+#[derive(Debug)]
+pub struct ExecutorIter<'a> {
+    exec: &'a mut Executor,
+    io: Rc<Mutex<Io>>,
+}
+
+impl<'a> ExecutorIter<'a> {
+    ///
+    /// Creates a new [`ExecutorIter`] for the given [`Executor`] and [`Rc<Mutex<IoContext>>`] or [`None`].
+    ///
+    fn new(exec: &'a mut Executor, io: impl Into<Option<Rc<Mutex<Io>>>>) -> Self {
+        Self {
+            exec,
+            io: io
+                .into()
+                .unwrap_or_else(|| Rc::new(Mutex::new(Io::new(Mode::Lean)))),
+        }
+    }
+}
+
+impl<'a> Iterator for ExecutorIter<'a> {
     type Item = Result<(), Error>;
     ///
     /// Advances this executor to the next instruction and attempts executing it.
@@ -187,11 +213,11 @@ impl Iterator for Executor {
 
     // TODO: use a generator here at some point
     fn next(&mut self) -> Option<Self::Item> {
-        if self.tokens.error() {
+        if self.exec.tokens.error() {
             None
         } else {
-            match self.tokens.next()? {
-                Ok(token) => Some(self.next_token(token)),
+            match self.exec.tokens.next()? {
+                Ok(token) => Some(self.exec.next_token(&self.io, token)),
                 Err(inner) => Some(Err(Error::parse(inner))),
             }
         }

@@ -3,13 +3,10 @@ use crate::{
     helper::{EolinaRange, EolinaRangeBound},
     parse,
 };
-use std::{
-    fmt::{Display, Formatter, Result as FmtResult},
-    io,
-};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 ///
-/// Represents an error taht can occur during execution of a program.
+/// Represents an error that can occur during program execution.
 ///
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
@@ -21,18 +18,18 @@ impl Error {
     ///
     /// Creates a new [`Error`] for a parse error with the given inner [`parse::Error`].
     ///
-    pub fn parse(inner: parse::Error) -> Self {
+    pub fn malformed() -> Self {
         Self {
-            repr: ErrorKind::Parse(inner),
+            repr: ErrorKind::ResetAfterParse,
         }
     }
 
     ///
-    /// Creates a new [`Error`] for an io error with the given inner [`io::Error`].
+    /// Creates a new [`Error`] for a parse error with the given inner [`parse::Error`].
     ///
-    pub fn io(inner: io::Error) -> Self {
+    pub fn parse(inner: parse::Error) -> Self {
         Self {
-            repr: ErrorKind::Io(inner),
+            repr: ErrorKind::Parse(inner),
         }
     }
 
@@ -92,15 +89,6 @@ impl Error {
     }
 }
 
-impl From<io::Error> for Error {
-    ///
-    /// Creates an [`Error`] from an [`io::Error`].
-    ///
-    fn from(inner: io::Error) -> Self {
-        Self::io(inner)
-    }
-}
-
 impl From<parse::Error> for Error {
     ///
     /// Creates an [`Error`] from a [`parse::Error`].
@@ -117,20 +105,21 @@ impl Display for Error {
 }
 
 ///
-/// Represents the kind of an error during execution.
+/// Represents the kind of an error during program execution.
 ///
 #[non_exhaustive]
 #[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 enum ErrorKind {
+    ///
+    /// An error that ocurs when a malformed program is reset.
+    ///
+    ResetAfterParse,
+
     ///
     /// An error occured during parsing.
     ///
     Parse(parse::Error),
-
-    ///
-    /// An error occured during IO.
-    ///
-    Io(io::Error),
 
     ///
     /// An error when have incompatible indecies (start > end).
@@ -158,44 +147,11 @@ enum ErrorKind {
     QueueEmpty,
 }
 
-#[cfg(test)]
-impl PartialEq for ErrorKind {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (ErrorKind::Parse(this), ErrorKind::Parse(other)) if this == other => true,
-            (
-                ErrorKind::SliceIncompatible(this_g, this_e, this_l),
-                ErrorKind::SliceIncompatible(other_g, other_e, other_l),
-            ) if this_l == other_l && this_e == other_e && this_g == other_g => true,
-            (
-                ErrorKind::SliceOutOfRange(this_g, this_e, this_l),
-                ErrorKind::SliceOutOfRange(other_g, other_e, other_l),
-            ) if this_l == other_l && this_e == other_e && this_g == other_g => true,
-            (ErrorKind::ArgMismatch(this_e, this_g), ErrorKind::ArgMismatch(other_e, other_g))
-                if this_g == other_g && this_e == other_e =>
-            {
-                true
-            }
-            (ErrorKind::Mismatch(this_e, this_g), ErrorKind::Mismatch(other_e, other_g))
-                if this_g == other_g && this_e == other_e =>
-            {
-                true
-            }
-            (ErrorKind::QueueEmpty, ErrorKind::QueueEmpty) => true,
-            (ErrorKind::Io(_), ErrorKind::Io(_)) => panic!("don't compare io errors"),
-            _ => false,
-        }
-    }
-}
-
-#[cfg(test)]
-impl Eq for ErrorKind {}
-
 impl Display for ErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
+            Self::ResetAfterParse => f.write_str("reset after parse error: the programm was reset after previously encountering a parse error"),
             Self::Parse(inner) => write!(f, "parse error: {}", inner),
-            Self::Io(inner) => write!(f, "io error: {}", inner),
             Self::SliceIncompatible(given, translated, length) => {
                 write!(
                     f,

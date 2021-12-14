@@ -4,4 +4,7 @@
 //!
 
 mod inner;
-pub use inner::ReplContext;
+pub use inner::Context;
+
+mod err;
+pub use err::Error;
