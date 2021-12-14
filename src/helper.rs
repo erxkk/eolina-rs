@@ -1,7 +1,37 @@
 use std::{
     fmt::{self, Display, Formatter, Write},
-    ops::{Range, RangeFrom, RangeFull, RangeTo},
+    ops::{Deref, Range, RangeFrom, RangeFull, RangeTo},
 };
+
+///
+/// A struct that does not permit any mutable references to it's inner value.
+///
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Immutable<T>(T);
+
+impl<T> Immutable<T> {
+    ///
+    /// Creates a new [`Immutable`] to disallow mutable references.
+    ///
+    pub fn new(value: T) -> Self {
+        Self(value)
+    }
+
+    ///
+    /// Unwraps this [`Immutable`] into it's inner value.
+    ///
+    pub fn unwrap(this: Self) -> T {
+        this.0
+    }
+}
+
+impl<T> Deref for Immutable<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 ///
 /// An extension trait for checking checking ascii chars for specific

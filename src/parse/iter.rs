@@ -1,5 +1,4 @@
 use super::{next_token, Error, Token};
-use std::rc::Rc;
 
 ///
 /// A token iterator, attempts yielding tokens on every call to [`Iterator::next`].
@@ -8,20 +7,20 @@ use std::rc::Rc;
 /// Use [`Iterator::collect::<Result<C, _>>()`] to collect into a `C`.
 ///
 #[derive(Debug)]
-pub struct TokenIter {
-    input: Rc<String>,
-    index: usize,
+pub struct TokenIter<'a> {
+    input: &'a str,
+    slice: &'a str,
     error: bool,
 }
 
-impl TokenIter {
+impl<'a> TokenIter<'a> {
     ///
     /// Creates a new [`TokenIter`] for the given `input` string.
     ///
-    pub fn new(input: Rc<String>) -> Self {
+    pub fn new(input: &'a str) -> Self {
         Self {
             input,
-            index: 0,
+            slice: input,
             error: false,
         }
     }
@@ -34,23 +33,16 @@ impl TokenIter {
     }
 }
 
-impl Iterator for TokenIter {
+impl<'a> Iterator for TokenIter<'a> {
     type Item = Result<Token, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.error || self.input[self.index..].is_empty() {
+        if self.error || self.slice.is_empty() {
             None
         } else {
-            match next_token(&self.input[self.index..]) {
+            match next_token(self.slice) {
                 Ok((rest, token)) => {
-                    self.index = if rest.is_empty() {
-                        self.input.len()
-                    } else {
-                        self.input.find(rest).unwrap_or_else(|| {
-                            panic!("next_token returned invalid rest slice `{}`", rest)
-                        })
-                    };
-
+                    self.slice = rest;
                     self.error = false;
                     Some(Ok(token))
                 }
@@ -69,7 +61,7 @@ mod test {
 
     #[test]
     fn token_iter() {
-        let stream = TokenIter::new("<>//|.|".to_owned().into());
+        let stream = TokenIter::new("<>//|.|");
         let tokens = stream
             .collect::<Result<Vec<_>, _>>()
             .expect("the given tokens are valid");
@@ -87,12 +79,12 @@ mod test {
 
     #[test]
     fn token_iter_error() {
-        let stream = TokenIter::new("<>/|.".to_owned().into());
+        let stream = TokenIter::new("<>/|.");
         stream
             .collect::<Result<Vec<_>, _>>()
             .expect_err("`|.` is invalid");
 
-        let mut stream = TokenIter::new("|.".to_owned().into());
+        let mut stream = TokenIter::new("|.");
         stream.next();
 
         assert!(stream.error);

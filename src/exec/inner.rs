@@ -1,30 +1,30 @@
 use super::{func, Error, Value};
 use crate::{
-    io::{Io, Kind, Mode},
+    helper::Immutable,
+    io::{Io, Kind},
     parse::{Token, TokenIter},
 };
-use std::{collections::VecDeque, rc::Rc, sync::Mutex};
+use std::collections::VecDeque;
 
 ///
 /// Lazily yields tokens from a given input and interprets them
 ///
 #[derive(Debug)]
 pub struct Executor {
-    input: Rc<String>,
+    // this type is used as a marker that this will never be mutated
+    // through a reference
+    input: Immutable<String>,
     values: VecDeque<Value>,
-    tokens: TokenIter,
 }
 
 impl Executor {
     ///
     /// Creates a new [`Executor`] with the given `tokens` and an empty queue.
     ///
-    pub fn new(input: Rc<String>) -> Self {
-        let clone = Rc::clone(&input);
+    pub fn new(input: String) -> Self {
         Self {
-            input,
+            input: Immutable::new(input),
             values: VecDeque::new(),
-            tokens: TokenIter::new(clone),
         }
     }
 
@@ -43,30 +43,10 @@ impl Executor {
     }
 
     ///
-    /// Returns if this executor encountered an error.
+    /// Resets this executor, resetting it's values.
     ///
-    pub fn error(&self) -> bool {
-        self.tokens.error()
-    }
-
-    ///
-    /// Resets this executor, resetting it's instruction iterator clears it's values.
-    ///
-    /// ### Returns
-    ///
-    /// * [`Ok(())`] if the executor could be reset
-    /// * [`Err(str)`] if the executor could not be reset
-    ///   * `str` contains the error reason
-    ///
-    pub fn reset(&mut self) -> Result<(), Error> {
-        // TODO: remove this error? this should technically never happen
-        if self.tokens.error() {
-            Err(Error::malformed())
-        } else {
-            self.tokens = TokenIter::new(Rc::clone(&self.input));
-            self.values.clear();
-            Ok(())
-        }
+    pub fn reset(&mut self) {
+        self.values.clear();
     }
 
     ///
@@ -86,13 +66,10 @@ impl Executor {
     ///
     /// Advances to the next token.
     ///
-    fn next_token(&mut self, io: &Rc<Mutex<Io>>, token: Token) -> Result<(), Error> {
+    fn next_token(&mut self, io: &mut Io, token: Token) -> Result<(), Error> {
         match token {
             Token::In => {
-                let mut val = io
-                    .lock()
-                    .expect("mutex poisened")
-                    .read_expect(" in", self.input());
+                let mut val = io.read_expect(" in", self.input());
 
                 // truncate the '\n'
                 if val.ends_with('\n') {
@@ -103,9 +80,7 @@ impl Executor {
             }
             Token::Out => {
                 let val = self.pop_queue()?;
-                io.lock()
-                    .expect("mutex poisened")
-                    .write_expect(Kind::Output, val, self.input());
+                io.write_expect(Kind::Output, val, self.input());
             }
             Token::Rotate(num) => {
                 self.values.rotate_left(num);
@@ -171,33 +146,45 @@ impl Executor {
         Ok(())
     }
 
-    //TODO: doc
-    pub fn iter(&mut self, io: impl Into<Option<Rc<Mutex<Io>>>>) -> ExecutorIter<'_> {
+    ///
+    /// Returns an [`ExecutorIter`] that executes the
+    ///
+    pub fn iter<'b>(&mut self, io: &'b mut Io) -> ExecutorIter<'_, 'b> {
         ExecutorIter::new(self, io)
     }
 }
 
 #[derive(Debug)]
-pub struct ExecutorIter<'a> {
+pub struct ExecutorIter<'a, 'b> {
     exec: &'a mut Executor,
-    io: Rc<Mutex<Io>>,
+    io: &'b mut Io,
+    tokens: TokenIter<'a>,
 }
 
-impl<'a> ExecutorIter<'a> {
+impl<'a, 'b> ExecutorIter<'a, 'b> {
     ///
     /// Creates a new [`ExecutorIter`] for the given [`Executor`] and [`Rc<Mutex<IoContext>>`] or [`None`].
     ///
-    fn new(exec: &'a mut Executor, io: impl Into<Option<Rc<Mutex<Io>>>>) -> Self {
+    fn new(exec: &'a mut Executor, io: &'b mut Io) -> Self {
+        // TODO: this design can be improved to remove then need for unsafe here
+
+        // SAFTEY:
+        // * The String is not mutated by this `ExecutorIter`
+        // * The lifetime of the String is tied to it's executors lifetime,
+        //   and therefore at least valid for as long as this mutable refernce
+        // * The String is never mutated after it's creation because it is wrapped in `Immutable`
+        let slice: &'a str = unsafe { std::mem::transmute(exec.input()) };
+
         Self {
             exec,
-            io: io
-                .into()
-                .unwrap_or_else(|| Rc::new(Mutex::new(Io::new(Mode::Lean)))),
+            io,
+            tokens: TokenIter::new(slice),
         }
     }
 }
 
-impl<'a> Iterator for ExecutorIter<'a> {
+// TODO: use a generator here at some point
+impl<'a, 'b> Iterator for ExecutorIter<'a, 'b> {
     type Item = Result<(), Error>;
     ///
     /// Advances this executor to the next instruction and attempts executing it.
@@ -210,14 +197,12 @@ impl<'a> Iterator for ExecutorIter<'a> {
     /// * [`None`] if the previous result was an [`Error`] or the all instructions were executed
     ///   * `self::error` returns whether or not an error was encountered before
     ///
-
-    // TODO: use a generator here at some point
     fn next(&mut self) -> Option<Self::Item> {
-        if self.exec.tokens.error() {
+        if self.tokens.error() {
             None
         } else {
-            match self.exec.tokens.next()? {
-                Ok(token) => Some(self.exec.next_token(&self.io, token)),
+            match self.tokens.next()? {
+                Ok(token) => Some(self.exec.next_token(self.io, token)),
                 Err(inner) => Some(Err(Error::parse(inner))),
             }
         }

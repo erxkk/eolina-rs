@@ -1,6 +1,6 @@
 use super::Error;
 use crate::{exec::Executor, io::Io, io::Kind, io::Mode};
-use std::{collections::HashMap, process, rc::Rc, sync::Mutex};
+use std::{collections::HashMap, process};
 
 // TODO: write tests
 // TODO: allow spaces in programs when parsing `!s` (parse program arg as remainder)
@@ -10,7 +10,7 @@ use std::{collections::HashMap, process, rc::Rc, sync::Mutex};
 ///
 pub struct Context {
     io: Io,
-    exec_io: Rc<Mutex<Io>>,
+    exec_io: Io,
     execs: HashMap<String, Executor>,
 }
 
@@ -21,13 +21,13 @@ impl Context {
     pub fn new() -> Self {
         Self {
             io: Io::with(Mode::Colorful, None, None, "[".to_owned(), "]: ".to_owned()),
-            exec_io: Rc::new(Mutex::new(Io::with(
+            exec_io: Io::with(
                 Mode::Colorful,
                 "[".to_owned(),
                 "]: ".to_owned(),
                 "[".to_owned(),
                 "]: ".to_owned(),
-            ))),
+            ),
             execs: HashMap::new(),
         }
     }
@@ -63,7 +63,7 @@ impl Context {
                 continue 'outer;
             }
 
-            let mut exec = Executor::new(Rc::new(input));
+            let mut exec = Executor::new(input);
             if let Err(err) = self.run_exec(&mut exec) {
                 self.io.write_expect(Kind::Error, err, exec.input());
             }
@@ -79,14 +79,14 @@ impl Context {
     /// * [`Err(string)`] if the executor could not be executed or reset
     ///   * `string` contains the error reason
     ///
-    fn run_exec(&self, exec: &mut Executor) -> Result<(), Error> {
-        for res in exec.iter(Rc::clone(&self.exec_io)) {
+    fn run_exec(&mut self, exec: &mut Executor) -> Result<(), Error> {
+        for res in exec.iter(&mut self.exec_io) {
             if let Some(err) = res.err() {
                 return Err(Error::exec(err));
             }
         }
 
-        exec.reset()?;
+        exec.reset();
         Ok(())
     }
 
@@ -136,12 +136,12 @@ impl Context {
             }
             "example" | "eg" => {
                 self.io
-                    .write_expect(Kind::Output, "    <>          # echo program", None);
+                    .write_expect(Kind::Output, "<>            echo program", None);
                 self.io
-                    .write_expect(Kind::Output, "    <*>>        # duplicate echo", None);
+                    .write_expect(Kind::Output, "<*>>          duplicate echo", None);
                 self.io.write_expect(
                     Kind::Output,
-                    "    <*[^][_]~>  # orders by case, upper first",
+                    "<*[^][_]~>    orders by case, upper first",
                     None,
                 );
                 Ok(())
@@ -159,8 +159,7 @@ impl Context {
                     let program = iter
                         .next()
                         .ok_or_else(|| Error::missing_param("program", 1))?;
-                    let program = Rc::new(program.to_owned());
-                    self.execs.insert(name, Executor::new(Rc::clone(&program)));
+                    self.execs.insert(name, Executor::new(program.to_owned()));
                     Ok(())
                 }
                 [b'c', b' ', ..] => {
