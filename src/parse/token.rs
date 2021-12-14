@@ -3,7 +3,7 @@ use crate::helper::EolinaRange;
 use super::Error;
 use nom::{
     branch::alt,
-    bytes::complete::tag,
+    bytes::complete::{tag, take_till},
     character::complete::{digit0, digit1},
     combinator::opt,
     error::Error as NomError,
@@ -48,6 +48,7 @@ impl Display for Check {
         }
     }
 }
+
 ///
 /// A filter or map token, a token between `[` and `]` or `{` and `}` respectively.
 ///
@@ -82,7 +83,7 @@ impl Display for Map {
 ///
 /// A function token.
 ///
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token {
     ///
     /// The input token `<`.
@@ -95,9 +96,9 @@ pub enum Token {
     Out,
 
     ///
-    /// The split token `/`.
+    /// The split token `/x/` where `x` is empty or a [`str`].
     ///
-    Split,
+    Split(Option<String>),
 
     ///
     /// The join token `.`.
@@ -160,7 +161,10 @@ impl Display for Token {
         match self {
             Self::In => f.write_str("<"),
             Self::Out => f.write_str(">"),
-            Self::Split => f.write_str("/"),
+            Self::Split(split) => match split {
+                Some(string) => write!(f, "/{}/", string),
+                None => f.write_str("//"),
+            },
             Self::Join => f.write_str("."),
             Self::Concat => f.write_str("~"),
             Self::Copy => f.write_str("*"),
@@ -198,7 +202,6 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
     let single = (
         tag("<"),
         tag(">"),
-        tag("/"),
         tag("."),
         tag("~"),
         tag("*"),
@@ -210,8 +213,18 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
 
     let double = (pair(tag("@"), digit0),);
 
+    let mut split = delimited(
+        tag("/"),
+        opt(delimited(
+            tag("\""),
+            take_till(|ch| matches!(ch, '"' | '/')),
+            tag("\""),
+        )),
+        tag("/"),
+    );
+
     // i don't want to talk about it
-    let slice = (delimited(
+    let mut slice = delimited(
         tag("|"),
         separated_pair(
             opt(pair(opt(tag("-")), digit1)),
@@ -219,21 +232,18 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
             opt(pair(opt(tag("-")), digit1)),
         ),
         tag("|"),
-    ),);
+    );
 
-    let filter = (delimited(
+    let mut filter = delimited(
         tag("["),
         alt((tag("v"), tag("c"), tag("_"), tag("^"))),
         tag("]"),
-    ),);
+    );
 
-    let map = (delimited(
-        tag("{"),
-        alt((tag("_"), tag("^"), tag("%"))),
-        tag("}"),
-    ),);
+    let mut map = delimited(tag("{"), alt((tag("_"), tag("^"), tag("%"))), tag("}"));
 
     type Single<'a> = Result<(&'a str, &'a str), NomErr<NomError<&'a str>>>;
+    type SingleOpt<'a> = Result<(&'a str, Option<&'a str>), NomErr<NomError<&'a str>>>;
     type Double<'a> = Result<(&'a str, (&'a str, &'a str)), NomErr<NomError<&'a str>>>;
 
     // no i really don't wnat to talk about it
@@ -251,9 +261,10 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
     // TODO: if type_ascription is stabilized, these can be evaluated one at a time
     let single_res: Single = alt(single)(input);
     let double_res: Double = alt(double)(input);
-    let filter_res: Single = alt(filter)(input);
-    let map_res: Single = alt(map)(input);
-    let slice_res: NestedDouble = alt(slice)(input);
+    let split_res: SingleOpt = split(input);
+    let filter_res: Single = filter(input);
+    let map_res: Single = map(input);
+    let slice_res: NestedDouble = slice(input);
 
     if let Ok((rest, parsed)) = single_res {
         Ok((
@@ -261,7 +272,6 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
             match parsed {
                 "<" => Token::In,
                 ">" => Token::Out,
-                "/" => Token::Split,
                 "." => Token::Join,
                 "~" => Token::Concat,
                 "*" => Token::Copy,
@@ -280,6 +290,8 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
                 _ => unreachable!(),
             },
         ))
+    } else if let Ok((rest, optional)) = split_res {
+        Ok((rest, Token::Split(optional.map(ToOwned::to_owned))))
     } else if let Ok((rest, parsed)) = map_res {
         Ok((
             rest,
@@ -326,12 +338,24 @@ mod test {
     fn single() {
         assert_eq!(next_token("<").unwrap(), ("", Token::In));
         assert_eq!(next_token(">").unwrap(), ("", Token::Out));
-        assert_eq!(next_token("/").unwrap(), ("", Token::Split));
         assert_eq!(next_token(".").unwrap(), ("", Token::Join));
         assert_eq!(next_token("v").unwrap(), ("", Token::IsVowel));
         assert_eq!(next_token("c").unwrap(), ("", Token::IsConso));
         assert_eq!(next_token("_").unwrap(), ("", Token::IsLower));
         assert_eq!(next_token("^").unwrap(), ("", Token::IsUpper));
+    }
+
+    #[test]
+    fn split() {
+        assert_eq!(next_token("//").unwrap(), ("", Token::Split(None)));
+        assert_eq!(
+            next_token("/\"\"/").unwrap(),
+            ("", Token::Split(Some("".to_owned())))
+        );
+        assert_eq!(
+            next_token("/\"aa\"/").unwrap(),
+            ("", Token::Split(Some("aa".to_owned())))
+        );
     }
 
     #[test]
@@ -403,9 +427,9 @@ mod test {
 
     #[test]
     fn repeating() {
-        assert_eq!(next_token("<>/|.|").unwrap(), (">/|.|", Token::In));
-        assert_eq!(next_token(">/|.|").unwrap(), ("/|.|", Token::Out));
-        assert_eq!(next_token("/|.|").unwrap(), ("|.|", Token::Split));
+        assert_eq!(next_token("<>//|.|").unwrap(), (">//|.|", Token::In));
+        assert_eq!(next_token(">//|.|").unwrap(), ("//|.|", Token::Out));
+        assert_eq!(next_token("//|.|").unwrap(), ("|.|", Token::Split(None)));
         assert_eq!(next_token("|.|").unwrap(), ("", Token::Slice((..).into())));
     }
 }

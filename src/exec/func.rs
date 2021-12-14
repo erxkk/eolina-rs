@@ -3,7 +3,8 @@ use crate::helper::{AsciiExt, EolinaRange, EolinaRangeBound};
 use crate::parse::{CheckToken, MapToken};
 
 ///
-/// Splits the given input into it's [`char`]s.
+/// Splits the given input into it's [`char`]s if no `split` is given otherwise
+/// splits by `split`.
 ///
 /// ### Accepts
 ///
@@ -16,14 +17,16 @@ use crate::parse::{CheckToken, MapToken};
 /// * [`Err(error)`]
 ///   * `error` contains an arg type mismatch [`Error`]
 ///
-pub fn split(input: Value) -> Result<Value, Error> {
-    Ok(Value::StringVec(
-        input
-            .unwrap_string()?
-            .chars()
-            .map(|ch| ch.to_string())
+pub fn split(input: Value, split: Option<String>) -> Result<Value, Error> {
+    let string = input.unwrap_string()?;
+    Ok(Value::StringVec(match split {
+        Some(split) => string
+            .split(&split)
+            .filter(|str| !str.is_empty())
+            .map(ToOwned::to_owned)
             .collect(),
-    ))
+        None => string.chars().map(|ch| ch.to_string()).collect(),
+    }))
 }
 
 ///
@@ -322,11 +325,20 @@ mod test {
     #[test]
     fn split() {
         assert_eq!(
-            super::split(Value::String("Abc".to_owned())).unwrap(),
+            super::split(Value::String("Abc".to_owned()), None).unwrap(),
             Value::StringVec(vec!["A".to_owned(), "b".to_owned(), "c".to_owned()])
         );
         assert_eq!(
-            super::split(Value::Bool(true)).unwrap_err(),
+            super::split(Value::String("Abcbdebfb".to_owned()), Some("b".to_owned())).unwrap(),
+            Value::StringVec(vec![
+                "A".to_owned(),
+                "c".to_owned(),
+                "de".to_owned(),
+                "f".to_owned()
+            ])
+        );
+        assert_eq!(
+            super::split(Value::Bool(true), None).unwrap_err(),
             Error::arg_mismatch(&[ValueKind::String], ValueKind::Bool)
         );
     }

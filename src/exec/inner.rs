@@ -109,9 +109,9 @@ impl Executor {
             Token::Rotate(num) => {
                 self.values.rotate_left(num);
             }
-            Token::Split => {
+            Token::Split(split) => {
                 let val = self.pop_queue()?;
-                let ret = func::split(val)?;
+                let ret = func::split(val, split)?;
                 self.values.push_back(ret);
             }
             Token::Join => {

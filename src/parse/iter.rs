@@ -69,7 +69,7 @@ mod test {
 
     #[test]
     fn token_iter() {
-        let stream = TokenIter::new("<>/|.|".to_owned().into());
+        let stream = TokenIter::new("<>//|.|".to_owned().into());
         let tokens = stream
             .collect::<Result<Vec<_>, _>>()
             .expect("the given tokens are valid");
@@ -79,7 +79,7 @@ mod test {
             vec![
                 Token::In,
                 Token::Out,
-                Token::Split,
+                Token::Split(None),
                 Token::Slice((..).into())
             ]
         );
