@@ -1,7 +1,7 @@
 use std::fmt::{self, Display, Formatter};
 
 ///
-/// Represents an error during tokenization.
+/// Represents an error during parsing.
 ///
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
@@ -12,7 +12,7 @@ pub struct Error {
 
 impl Error {
     ///
-    /// Creates a new [`Error`] for an unknown token at th estart of the given slice.
+    /// Creates a new [`Error`] for an unknown token at the start of the given slice.
     ///
     pub fn unknown(slice: String) -> Self {
         Self {
@@ -42,7 +42,7 @@ impl Display for Error {
 }
 
 ///
-/// Represents an error during tokenization.
+/// Represents an error during parsing.
 ///
 #[non_exhaustive]
 #[derive(Debug)]

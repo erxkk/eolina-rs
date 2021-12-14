@@ -4,7 +4,6 @@ use std::{
     io::{self, Stderr, Stdin, Stdout, Write},
 };
 
-// TODO: write tests
 // TODO: multiline indentation
 
 ///

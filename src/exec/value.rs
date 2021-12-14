@@ -92,15 +92,17 @@ impl Display for Value {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Kind {
     ///
-    /// A string.
+    /// A [`String`].
     ///
     String,
+
     ///
-    /// A array fo strings.
+    /// A vec of [`String`]s.
     ///
     StringVec,
+
     ///
-    /// A boolean.
+    /// A [`bool`].
     ///
     Bool,
 }

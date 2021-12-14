@@ -25,7 +25,8 @@ impl Error {
     }
 
     ///
-    /// Creates a new [`Error`] for a slice error, with the given invalid range and target length.
+    /// Creates a new [`Error`] for an out of target range slice, with the given invalid
+    /// range and target length.
     ///
     pub fn slice_oor(
         given: impl Into<EolinaRange>,
@@ -38,7 +39,8 @@ impl Error {
     }
 
     ///
-    /// Creates a new [`Error`] for a slice error, with the given invalid range and target length.
+    /// Creates a new [`Error`] for a incompatible slice indices, with the given invalid
+    /// range and target length.
     ///
     pub fn slice_incompat(
         given: impl Into<EolinaRange>,

@@ -10,6 +10,7 @@ mod parse;
 mod repl;
 
 fn main() {
+    // TODO: reduce reply to one running program with stepwise execution
     // TODO: fancy error reporting via miette
     // TODO: use raw terminal to allow reply history?
     // TODO: use clap to allow non-repl/non-interactive (without IO-prompts)

@@ -19,7 +19,7 @@ pub struct Context {
 
 impl Context {
     ///
-    /// Creates a new [`Executor`] with the given `tokens` and an empty queue.
+    /// Creates a new [`Context`] with the given `tokens` and an empty queue.
     ///
     pub fn new(input: String) -> Self {
         Self {
@@ -147,7 +147,7 @@ impl Context {
     }
 
     ///
-    /// Returns an [`ExecutorIter`] that executes the
+    /// Returns an [`Iter`] that parses and executes the instructions lazily.
     ///
     pub fn iter<'b>(&mut self, io: &'b mut Io) -> Iter<'_, 'b> {
         Iter::new(self, io)
@@ -163,10 +163,11 @@ pub struct Iter<'a, 'b> {
 
 impl<'a, 'b> Iter<'a, 'b> {
     ///
-    /// Creates a new [`ExecutorIter`] for the given [`Executor`] and [`Rc<Mutex<IoContext>>`] or [`None`].
+    /// Creates a new [`Iter`] for the given [`Context`] and [`Io`] or [`None`].
     ///
     fn new(exec: &'a mut Context, io: &'b mut Io) -> Self {
-        // TODO: this design can be improved to remove then need for unsafe here
+        // RefCell can be used here to borrow only immutably, but this has some dynamic overhead
+        // and comes with the possibility of accidently borrowing it mutably later one anyway
 
         // SAFTEY:
         // * The String is not mutated by this `ExecutorIter`
@@ -188,12 +189,12 @@ impl<'a, 'b> Iter<'a, 'b> {
 impl<'a, 'b> Iterator for Iter<'a, 'b> {
     type Item = Result<(), Error>;
     ///
-    /// Advances this executor to the next instruction and attempts executing it.
+    /// Attempts parsing and executing the next instruction.
     ///
     /// ### Returns
     ///
-    /// * [`Some(Ok(()))`] if the current instruction could be executed
-    /// * [`Some(Err(error))`] if the next instruction is invalid or could not be executed
+    /// * [`Some(Ok(()))`] if the current instruction could be parsed and executed
+    /// * [`Some(Err(error))`] if the next instruction is invalid or could not be parsed or executed
     ///   * `error` contains the [`Error`] that occured during execution
     /// * [`None`] if the previous result was an [`Error`] or the all instructions were executed
     ///   * `self::error` returns whether or not an error was encountered before

@@ -8,7 +8,7 @@ use crate::parse::{CheckToken, MapToken};
 ///
 /// ### Accepts
 ///
-/// * [`ValueKind::String`]
+/// * [`Kind::String`]
 ///
 /// ### Returns
 ///
@@ -34,7 +34,7 @@ pub fn split(input: Value, split: Option<String>) -> Result<Value, Error> {
 ///
 /// ### Accepts
 ///
-/// * [`ValueKind::StringVec`]
+/// * [`Kind::StringVec`]
 ///
 /// ### Returns
 ///
@@ -54,8 +54,8 @@ pub fn join(input: Value) -> Result<Value, Error> {
 ///
 /// ### Accepts
 ///
-/// * [`ValueKind::String`]
-/// * [`ValueKind::StringVec`]
+/// * [`Kind::String`]
+/// * [`Kind::StringVec`]
 ///
 /// ### Returns
 ///
@@ -91,8 +91,8 @@ pub fn concat(input1: Value, input2: Value) -> Result<Value, Error> {
 ///
 /// ### Accepts
 ///
-/// * [`ValueKind::String`]
-/// * [`ValueKind::StringVec`]
+/// * [`Kind::String`]
+/// * [`Kind::StringVec`]
 ///
 /// ### Returns
 ///
@@ -110,8 +110,8 @@ pub fn is_conso(input: Value) -> Result<Value, Error> {
 ///
 /// ### Accepts
 ///
-/// * [`ValueKind::String`]
-/// * [`ValueKind::StringVec`]
+/// * [`Kind::String`]
+/// * [`Kind::StringVec`]
 ///
 /// ### Returns
 ///
@@ -129,8 +129,8 @@ pub fn is_vowel(input: Value) -> Result<Value, Error> {
 ///
 /// ### Accepts
 ///
-/// * [`ValueKind::String`]
-/// * [`ValueKind::StringVec`]
+/// * [`Kind::String`]
+/// * [`Kind::StringVec`]
 ///
 /// ### Returns
 ///
@@ -148,8 +148,8 @@ pub fn is_upper(input: Value) -> Result<Value, Error> {
 ///
 /// ### Accepts
 ///
-/// * [`ValueKind::String`]
-/// * [`ValueKind::StringVec`]
+/// * [`Kind::String`]
+/// * [`Kind::StringVec`]
 ///
 /// ### Returns
 ///
@@ -178,8 +178,8 @@ fn __check_all(input: Value, check: impl Fn(&String) -> bool) -> Result<Value, E
 ///
 /// ### Accepts
 ///
-/// * [`ValueKind::String`]
-/// * [`ValueKind::StringVec`]
+/// * [`Kind::String`]
+/// * [`Kind::StringVec`]
 ///
 /// ### Returns
 ///
@@ -214,8 +214,8 @@ fn __map<T: AsciiExt>(val: T, map: MapToken) -> T {
 ///
 /// ### Accepts
 ///
-/// * [`ValueKind::String`]
-/// * [`ValueKind::StringVec`]
+/// * [`Kind::String`]
+/// * [`Kind::StringVec`]
 ///
 /// ### Returns
 ///
@@ -258,8 +258,8 @@ fn __filter<T: AsciiExt>(val: &T, check: CheckToken) -> bool {
 ///
 /// ### Accepts
 ///
-/// * [`ValueKind::String`]
-/// * [`ValueKind::StringVec`]
+/// * [`Kind::String`]
+/// * [`Kind::StringVec`]
 ///
 /// ### Returns
 ///

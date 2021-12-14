@@ -2,8 +2,6 @@ use super::Error;
 use crate::{exec::Context as ExecContext, io::Io, io::Kind, io::Mode};
 use std::{collections::HashMap, process};
 
-// TODO: write tests
-
 ///
 /// A repl context, used for storing and executing programs.
 ///

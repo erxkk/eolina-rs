@@ -1,6 +1,5 @@
-use crate::helper::EolinaRange;
-
 use super::Error;
+use crate::helper::EolinaRange;
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_till},
@@ -96,7 +95,7 @@ pub enum Token {
     Out,
 
     ///
-    /// The split token `/x/` where `x` is empty or a [`str`].
+    /// The split token `/x/` where `x` is empty or a [`String`].
     ///
     Split(Option<String>),
 
@@ -192,12 +191,10 @@ impl Display for Token {
 ///   * `error` contains the [`Error`]
 ///
 pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
-    let input = input.trim_start_matches(|ch| ch == ' ' || ch == '\n' || ch == '\t');
+    let input = input.trim_start_matches(|ch| ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t');
     if input.is_empty() {
         return Err(Error::empty());
     }
-
-    // TODO: skip whitespace
 
     let single = (
         tag("<"),
@@ -258,7 +255,7 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
         NomErr<NomError<&'a str>>,
     >;
 
-    // TODO: if type_ascription is stabilized, these can be evaluated one at a time
+    // TODO: if type_ascription is stabilized and supported by rust-analyzer, these can be evaluated one at a time
     let single_res: Single = alt(single)(input);
     let double_res: Double = alt(double)(input);
     let split_res: SingleOpt = split(input);
