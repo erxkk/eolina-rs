@@ -4,7 +4,7 @@ use crate::{
     io::{Io, Kind},
     parse::{Token, TokenIter},
 };
-use std::collections::VecDeque;
+use std::{collections::VecDeque, ops::Deref};
 
 ///
 /// Lazily yields tokens from a given input and interprets them
@@ -69,7 +69,7 @@ impl Executor {
     fn next_token(&mut self, io: &mut Io, token: Token) -> Result<(), Error> {
         match token {
             Token::In => {
-                let mut val = io.read_expect(" in", self.input());
+                let mut val = io.read_expect(" in", &**self.input);
 
                 // truncate the '\n'
                 if val.ends_with('\n') {
@@ -80,7 +80,7 @@ impl Executor {
             }
             Token::Out => {
                 let val = self.pop_queue()?;
-                io.write_expect(Kind::Output, val, self.input());
+                io.write_expect(Kind::Output, val, &**self.input);
             }
             Token::Rotate(num) => {
                 self.values.rotate_left(num);
@@ -173,7 +173,8 @@ impl<'a, 'b> ExecutorIter<'a, 'b> {
         // * The lifetime of the String is tied to it's executors lifetime,
         //   and therefore at least valid for as long as this mutable refernce
         // * The String is never mutated after it's creation because it is wrapped in `Immutable`
-        let slice: &'a str = unsafe { std::mem::transmute(exec.input()) };
+        let slice: &'a str =
+            unsafe { std::mem::transmute(AsRef::<str>::as_ref(exec.input.deref())) };
 
         Self {
             exec,
