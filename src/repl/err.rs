@@ -8,11 +8,11 @@ use std::{
 /// Represents an error that can occur during repl execution.
 ///
 #[derive(Debug)]
-pub struct Error {
-    repr: ErrorKind,
+pub struct Error<'a> {
+    repr: ErrorKind<'a>,
 }
 
-impl Error {
+impl<'a> Error<'a> {
     ///
     /// Creates a new [`Error`] for a missing command parameter.
     ///
@@ -25,7 +25,7 @@ impl Error {
     ///
     /// Creates a new [`Error`] for an unknown command.
     ///
-    pub fn unknown_command(command: String) -> Self {
+    pub fn unknown_command(command: &'a str) -> Self {
         Self {
             repr: ErrorKind::UnknownCommand(command),
         }
@@ -34,7 +34,7 @@ impl Error {
     ///
     /// Creates a new [`Error`] for an unknown program.
     ///
-    pub fn unknown_program(program: String) -> Self {
+    pub fn unknown_program(program: &'a str) -> Self {
         Self {
             repr: ErrorKind::UnknownProgramm(program),
         }
@@ -59,7 +59,7 @@ impl Error {
     }
 }
 
-impl From<exec::Error> for Error {
+impl<'a> From<exec::Error> for Error<'a> {
     ///
     /// Creates an [`Error`] from an [`exec::Error`].
     ///
@@ -68,7 +68,7 @@ impl From<exec::Error> for Error {
     }
 }
 
-impl From<io::Error> for Error {
+impl<'a> From<io::Error> for Error<'a> {
     ///
     /// Creates an [`Error`] from an [`io::Error`].
     ///
@@ -77,7 +77,7 @@ impl From<io::Error> for Error {
     }
 }
 
-impl Display for Error {
+impl<'a> Display for Error<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.repr.fmt(f)
     }
@@ -88,11 +88,11 @@ impl Display for Error {
 ///
 #[non_exhaustive]
 #[derive(Debug)]
-enum ErrorKind {
+enum ErrorKind<'a> {
     ///
     /// An error when an unknown command is attempted to be loaded.
     ///
-    UnknownCommand(String),
+    UnknownCommand(&'a str),
 
     ///
     /// An error when a command is missing a parameter.
@@ -102,7 +102,7 @@ enum ErrorKind {
     ///
     /// An error when an unknown program is attempted to be loaded.
     ///
-    UnknownProgramm(String),
+    UnknownProgramm(&'a str),
 
     ///
     /// An error during executor execution.
@@ -115,7 +115,7 @@ enum ErrorKind {
     Io(io::Error),
 }
 
-impl Display for ErrorKind {
+impl<'a> Display for ErrorKind<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             ErrorKind::UnknownCommand(cmd) => write!(f, "unknown command: `{}`", cmd),

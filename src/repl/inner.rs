@@ -78,7 +78,7 @@ impl Context {
     /// * [`Err(string)`] if the executor could not be executed or reset
     ///   * `string` contains the error reason
     ///
-    fn run_exec(&mut self, exec: &mut Executor) -> Result<(), Error> {
+    fn run_exec<'a>(&mut self, exec: &mut Executor) -> Result<(), Error<'a>> {
         for res in exec.iter(&mut self.exec_io) {
             if let Some(err) = res.err() {
                 return Err(Error::exec(err));
@@ -100,7 +100,7 @@ impl Context {
     /// * [`Err(string)`] if the command could not be executed
     ///   * `string` contains the error reason
     ///
-    fn command(&mut self, cmd: &str) -> Result<(), Error> {
+    fn command<'a>(&mut self, cmd: &'a str) -> Result<(), Error<'a>> {
         match cmd {
             "exit" | "quit" | "q" => process::exit(0),
             "help" | "h" | "?" => {
@@ -182,7 +182,7 @@ impl Context {
                             self.execs.insert(name.to_string(), exec);
                             res
                         }
-                        None => Err(Error::unknown_program(x.to_owned())),
+                        None => Err(Error::unknown_program(x)),
                     }
                 }
                 [b'r', b' ', ..] => {
@@ -196,10 +196,10 @@ impl Context {
                             println!("removed program: `{}`: {}", name, exec.input());
                             Ok(())
                         }
-                        None => Err(Error::unknown_program(x.to_owned())),
+                        None => Err(Error::unknown_program(x)),
                     }
                 }
-                _ => Err(Error::unknown_command(x.to_owned())),
+                _ => Err(Error::unknown_command(x)),
             },
         }
     }

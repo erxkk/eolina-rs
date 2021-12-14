@@ -13,7 +13,7 @@ use nom::{
 use std::fmt::Display;
 
 ///
-/// A filter or map token, a token between `[` and `]` or `{` and `}` respectively.
+/// A filter or map token, a token between `[` and `]`.
 ///
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Check {
@@ -50,7 +50,7 @@ impl Display for Check {
 }
 
 ///
-/// A filter or map token, a token between `[` and `]` or `{` and `}` respectively.
+/// A filter or map token, a token between `{` and `}`.
 ///
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Map {

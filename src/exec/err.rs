@@ -18,15 +18,6 @@ impl Error {
     ///
     /// Creates a new [`Error`] for a parse error with the given inner [`parse::Error`].
     ///
-    pub fn malformed() -> Self {
-        Self {
-            repr: ErrorKind::ResetAfterParse,
-        }
-    }
-
-    ///
-    /// Creates a new [`Error`] for a parse error with the given inner [`parse::Error`].
-    ///
     pub fn parse(inner: parse::Error) -> Self {
         Self {
             repr: ErrorKind::Parse(inner),
@@ -112,11 +103,6 @@ impl Display for Error {
 #[cfg_attr(test, derive(PartialEq, Eq))]
 enum ErrorKind {
     ///
-    /// An error that ocurs when a malformed program is reset.
-    ///
-    ResetAfterParse,
-
-    ///
     /// An error occured during parsing.
     ///
     Parse(parse::Error),
@@ -150,7 +136,6 @@ enum ErrorKind {
 impl Display for ErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
-            Self::ResetAfterParse => f.write_str("reset after parse error: the programm was reset after previously encountering a parse error"),
             Self::Parse(inner) => write!(f, "parse error: {}", inner),
             Self::SliceIncompatible(given, translated, length) => {
                 write!(
