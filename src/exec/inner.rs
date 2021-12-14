@@ -2,22 +2,22 @@ use super::{func, Error, Value};
 use crate::{
     helper::Immutable,
     io::{Io, Kind},
-    parse::{Token, TokenIter},
+    parse::{Iter as TokenIter, Token},
 };
 use std::{collections::VecDeque, ops::Deref};
 
 ///
-/// Lazily yields tokens from a given input and interprets them
+/// The excution context for a program.
 ///
 #[derive(Debug)]
-pub struct Executor {
+pub struct Context {
     // this type is used as a marker that this will never be mutated
     // through a reference
     input: Immutable<String>,
     values: VecDeque<Value>,
 }
 
-impl Executor {
+impl Context {
     ///
     /// Creates a new [`Executor`] with the given `tokens` and an empty queue.
     ///
@@ -149,23 +149,23 @@ impl Executor {
     ///
     /// Returns an [`ExecutorIter`] that executes the
     ///
-    pub fn iter<'b>(&mut self, io: &'b mut Io) -> ExecutorIter<'_, 'b> {
-        ExecutorIter::new(self, io)
+    pub fn iter<'b>(&mut self, io: &'b mut Io) -> Iter<'_, 'b> {
+        Iter::new(self, io)
     }
 }
 
 #[derive(Debug)]
-pub struct ExecutorIter<'a, 'b> {
-    exec: &'a mut Executor,
+pub struct Iter<'a, 'b> {
+    exec: &'a mut Context,
     io: &'b mut Io,
     tokens: TokenIter<'a>,
 }
 
-impl<'a, 'b> ExecutorIter<'a, 'b> {
+impl<'a, 'b> Iter<'a, 'b> {
     ///
     /// Creates a new [`ExecutorIter`] for the given [`Executor`] and [`Rc<Mutex<IoContext>>`] or [`None`].
     ///
-    fn new(exec: &'a mut Executor, io: &'b mut Io) -> Self {
+    fn new(exec: &'a mut Context, io: &'b mut Io) -> Self {
         // TODO: this design can be improved to remove then need for unsafe here
 
         // SAFTEY:
@@ -185,7 +185,7 @@ impl<'a, 'b> ExecutorIter<'a, 'b> {
 }
 
 // TODO: use a generator here at some point
-impl<'a, 'b> Iterator for ExecutorIter<'a, 'b> {
+impl<'a, 'b> Iterator for Iter<'a, 'b> {
     type Item = Result<(), Error>;
     ///
     /// Advances this executor to the next instruction and attempts executing it.
@@ -209,5 +209,3 @@ impl<'a, 'b> Iterator for ExecutorIter<'a, 'b> {
         }
     }
 }
-
-// TODO: tests

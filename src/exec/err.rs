@@ -1,4 +1,4 @@
-use super::ValueKind;
+use super::Kind;
 use crate::{
     helper::{EolinaRange, EolinaRangeBound},
     parse,
@@ -54,7 +54,7 @@ impl Error {
     /// Creates a new [`Error`] for a arg type mismatch with the given the `expected`
     /// and `actual` types.
     ///
-    pub fn arg_mismatch(expected: &'static [ValueKind], actual: ValueKind) -> Self {
+    pub fn arg_mismatch(expected: &'static [Kind], actual: Kind) -> Self {
         Self {
             repr: ErrorKind::ArgMismatch(expected, actual),
         }
@@ -64,7 +64,7 @@ impl Error {
     /// Creates a new [`Error`] for a concat type mismatch with the given the `left`
     /// and `right` types.
     ///
-    pub fn mismatch(left: ValueKind, right: ValueKind) -> Self {
+    pub fn mismatch(left: Kind, right: Kind) -> Self {
         Self {
             repr: ErrorKind::Mismatch(left, right),
         }
@@ -120,12 +120,12 @@ enum ErrorKind {
     ///
     /// A function argument was not of an expected type.
     ///
-    ArgMismatch(&'static [ValueKind], ValueKind),
+    ArgMismatch(&'static [Kind], Kind),
 
     ///
     /// Two values were not of the same type.
     ///
-    Mismatch(ValueKind, ValueKind),
+    Mismatch(Kind, Kind),
 
     ///
     /// The queue was empty.

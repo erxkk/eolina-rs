@@ -1,5 +1,5 @@
 use super::Error;
-use crate::{exec::Executor, io::Io, io::Kind, io::Mode};
+use crate::{exec::Context as ExecContext, io::Io, io::Kind, io::Mode};
 use std::{collections::HashMap, process};
 
 // TODO: write tests
@@ -10,7 +10,7 @@ use std::{collections::HashMap, process};
 pub struct Context {
     io: Io,
     exec_io: Io,
-    execs: HashMap<String, Executor>,
+    execs: HashMap<String, ExecContext>,
 }
 
 impl Context {
@@ -62,7 +62,7 @@ impl Context {
                 continue 'outer;
             }
 
-            let mut exec = Executor::new(input);
+            let mut exec = ExecContext::new(input);
             if let Err(err) = self.run_exec(&mut exec) {
                 self.io.write_expect(Kind::Error, err, exec.input());
             }
@@ -78,7 +78,7 @@ impl Context {
     /// * [`Err(string)`] if the executor could not be executed or reset
     ///   * `string` contains the error reason
     ///
-    fn run_exec<'a>(&mut self, exec: &mut Executor) -> Result<(), Error<'a>> {
+    fn run_exec<'a>(&mut self, exec: &mut ExecContext) -> Result<(), Error<'a>> {
         for res in exec.iter(&mut self.exec_io) {
             if let Some(err) = res.err() {
                 return Err(Error::exec(err));
@@ -157,7 +157,7 @@ impl Context {
                     } else if let Some(pos) = x.find(' ') {
                         let (name, program) = x.split_at(pos);
                         self.execs
-                            .insert(name.to_owned(), Executor::new(program[1..].to_owned()));
+                            .insert(name.to_owned(), ExecContext::new(program[1..].to_owned()));
                         Ok(())
                     } else {
                         Err(Error::missing_param("program", 1))

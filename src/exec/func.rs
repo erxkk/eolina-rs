@@ -1,4 +1,4 @@
-use super::{Error, Value, ValueKind};
+use super::{Error, Kind, Value};
 use crate::helper::{AsciiExt, EolinaRange, EolinaRangeBound};
 use crate::parse::{CheckToken, MapToken};
 
@@ -75,11 +75,11 @@ pub fn concat(input1: Value, input2: Value) -> Result<Value, Error> {
             vec1
         })),
         (x, Value::Bool(_)) => Err(Error::arg_mismatch(
-            &[ValueKind::String, ValueKind::StringVec],
+            &[Kind::String, Kind::StringVec],
             x.kind(),
         )),
         (Value::Bool(_), x) => Err(Error::arg_mismatch(
-            &[ValueKind::String, ValueKind::StringVec],
+            &[Kind::String, Kind::StringVec],
             x.kind(),
         )),
         x => Err(Error::mismatch(x.0.kind(), x.1.kind())),
@@ -167,7 +167,7 @@ fn __check_all(input: Value, check: impl Fn(&String) -> bool) -> Result<Value, E
         Value::String(string) => Ok(Value::Bool(check(&string))),
         Value::StringVec(vec) => Ok(Value::Bool(vec.into_iter().all(|string| check(&string)))),
         x => Err(Error::arg_mismatch(
-            &[ValueKind::String, ValueKind::StringVec],
+            &[Kind::String, Kind::StringVec],
             x.kind(),
         )),
     }
@@ -195,7 +195,7 @@ pub fn map(input: Value, map: MapToken) -> Result<Value, Error> {
             vec.into_iter().map(|string| __map(string, map)).collect(),
         )),
         x => Err(Error::arg_mismatch(
-            &[ValueKind::String, ValueKind::StringVec],
+            &[Kind::String, Kind::StringVec],
             x.kind(),
         )),
     }
@@ -238,7 +238,7 @@ pub fn filter(input: Value, check: CheckToken) -> Result<Value, Error> {
                 .collect(),
         )),
         x => Err(Error::arg_mismatch(
-            &[ValueKind::String, ValueKind::StringVec],
+            &[Kind::String, Kind::StringVec],
             x.kind(),
         )),
     }
@@ -312,7 +312,7 @@ pub fn slice(input: Value, range: EolinaRange) -> Result<Value, Error> {
         Value::String(string) => Ok(Value::String(string[lower..upper].to_owned())),
         Value::StringVec(vec) => Ok(Value::StringVec(vec[lower..upper].to_owned())),
         x => Err(Error::arg_mismatch(
-            &[ValueKind::String, ValueKind::StringVec],
+            &[Kind::String, Kind::StringVec],
             x.kind(),
         )),
     }
@@ -339,7 +339,7 @@ mod test {
         );
         assert_eq!(
             super::split(Value::Bool(true), None).unwrap_err(),
-            Error::arg_mismatch(&[ValueKind::String], ValueKind::Bool)
+            Error::arg_mismatch(&[Kind::String], Kind::Bool)
         );
     }
 
@@ -356,7 +356,7 @@ mod test {
         );
         assert_eq!(
             super::join(Value::Bool(true)).unwrap_err(),
-            Error::arg_mismatch(&[ValueKind::StringVec], ValueKind::Bool)
+            Error::arg_mismatch(&[Kind::StringVec], Kind::Bool)
         );
     }
 
@@ -373,7 +373,7 @@ mod test {
         );
         assert_eq!(
             super::is_conso(Value::Bool(true)).unwrap_err(),
-            Error::arg_mismatch(&[ValueKind::String, ValueKind::StringVec], ValueKind::Bool)
+            Error::arg_mismatch(&[Kind::String, Kind::StringVec], Kind::Bool)
         );
     }
 
@@ -389,7 +389,7 @@ mod test {
         );
         assert_eq!(
             super::is_vowel(Value::Bool(true)).unwrap_err(),
-            Error::arg_mismatch(&[ValueKind::String, ValueKind::StringVec], ValueKind::Bool)
+            Error::arg_mismatch(&[Kind::String, Kind::StringVec], Kind::Bool)
         );
     }
 
@@ -405,7 +405,7 @@ mod test {
         );
         assert_eq!(
             super::is_lower(Value::Bool(true)).unwrap_err(),
-            Error::arg_mismatch(&[ValueKind::String, ValueKind::StringVec], ValueKind::Bool)
+            Error::arg_mismatch(&[Kind::String, Kind::StringVec], Kind::Bool)
         );
     }
 
@@ -421,7 +421,7 @@ mod test {
         );
         assert_eq!(
             super::is_upper(Value::Bool(true)).unwrap_err(),
-            Error::arg_mismatch(&[ValueKind::String, ValueKind::StringVec], ValueKind::Bool)
+            Error::arg_mismatch(&[Kind::String, Kind::StringVec], Kind::Bool)
         );
     }
 
@@ -445,7 +445,7 @@ mod test {
         );
         assert_eq!(
             super::map(Value::Bool(true), MapToken::Lower).unwrap_err(),
-            Error::arg_mismatch(&[ValueKind::String, ValueKind::StringVec], ValueKind::Bool)
+            Error::arg_mismatch(&[Kind::String, Kind::StringVec], Kind::Bool)
         );
     }
 
@@ -477,7 +477,7 @@ mod test {
         );
         assert_eq!(
             super::filter(Value::Bool(true), CheckToken::Vowel).unwrap_err(),
-            Error::arg_mismatch(&[ValueKind::String, ValueKind::StringVec], ValueKind::Bool)
+            Error::arg_mismatch(&[Kind::String, Kind::StringVec], Kind::Bool)
         );
     }
 

@@ -9,8 +9,9 @@ pub use self::err::Error;
 mod func;
 
 mod inner;
-pub use inner::Executor;
+pub use inner::Context;
+pub use inner::Iter;
 
 mod value;
+pub use value::Kind;
 pub use value::Value;
-pub use value::ValueKind;

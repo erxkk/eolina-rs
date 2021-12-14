@@ -3,7 +3,7 @@
 //!
 
 mod iter;
-pub use iter::TokenIter;
+pub use iter::Iter;
 
 mod err;
 pub use err::Error;

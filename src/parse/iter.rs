@@ -7,13 +7,13 @@ use super::{next_token, Error, Token};
 /// Use [`Iterator::collect::<Result<C, _>>()`] to collect into a `C`.
 ///
 #[derive(Debug)]
-pub struct TokenIter<'a> {
+pub struct Iter<'a> {
     input: &'a str,
     slice: &'a str,
     error: bool,
 }
 
-impl<'a> TokenIter<'a> {
+impl<'a> Iter<'a> {
     ///
     /// Creates a new [`TokenIter`] for the given `input` string.
     ///
@@ -33,7 +33,7 @@ impl<'a> TokenIter<'a> {
     }
 }
 
-impl<'a> Iterator for TokenIter<'a> {
+impl<'a> Iterator for Iter<'a> {
     type Item = Result<Token, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -61,7 +61,7 @@ mod test {
 
     #[test]
     fn token_iter() {
-        let stream = TokenIter::new("<>//|.|");
+        let stream = Iter::new("<>//|.|");
         let tokens = stream
             .collect::<Result<Vec<_>, _>>()
             .expect("the given tokens are valid");
@@ -79,12 +79,12 @@ mod test {
 
     #[test]
     fn token_iter_error() {
-        let stream = TokenIter::new("<>/|.");
+        let stream = Iter::new("<>/|.");
         stream
             .collect::<Result<Vec<_>, _>>()
             .expect_err("`|.` is invalid");
 
-        let mut stream = TokenIter::new("|.");
+        let mut stream = Iter::new("|.");
         stream.next();
 
         assert!(stream.error);

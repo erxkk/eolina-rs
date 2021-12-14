@@ -26,11 +26,11 @@ impl Value {
     ///
     /// Returns the kind of this value.
     ///
-    pub fn kind(&self) -> ValueKind {
+    pub fn kind(&self) -> Kind {
         match self {
-            Self::String(_) => ValueKind::String,
-            Self::StringVec(_) => ValueKind::StringVec,
-            Self::Bool(_) => ValueKind::Bool,
+            Self::String(_) => Kind::String,
+            Self::StringVec(_) => Kind::StringVec,
+            Self::Bool(_) => Kind::Bool,
         }
     }
 
@@ -40,7 +40,7 @@ impl Value {
     pub fn unwrap_string(self) -> Result<String, Error> {
         match self {
             Self::String(inner) => Ok(inner),
-            x => Err(Error::arg_mismatch(&[ValueKind::String], x.kind())),
+            x => Err(Error::arg_mismatch(&[Kind::String], x.kind())),
         }
     }
 
@@ -50,7 +50,7 @@ impl Value {
     pub fn unwrap_string_vec(self) -> Result<Vec<String>, Error> {
         match self {
             Self::StringVec(inner) => Ok(inner),
-            x => Err(Error::arg_mismatch(&[ValueKind::StringVec], x.kind())),
+            x => Err(Error::arg_mismatch(&[Kind::StringVec], x.kind())),
         }
     }
 
@@ -60,7 +60,7 @@ impl Value {
     pub fn unwrap_bool(self) -> Result<bool, Error> {
         match self {
             Self::Bool(inner) => Ok(inner),
-            x => Err(Error::arg_mismatch(&[ValueKind::Bool], x.kind())),
+            x => Err(Error::arg_mismatch(&[Kind::Bool], x.kind())),
         }
     }
 
@@ -71,7 +71,7 @@ impl Value {
         match self {
             Self::String(inner) => Ok(inner.len()),
             Self::StringVec(inner) => Ok(inner.len()),
-            x => Err(Error::arg_mismatch(&[ValueKind::String], x.kind())),
+            x => Err(Error::arg_mismatch(&[Kind::String], x.kind())),
         }
     }
 }
@@ -90,7 +90,7 @@ impl Display for Value {
 /// Represents the type of a value.
 ///
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum ValueKind {
+pub enum Kind {
     ///
     /// A string.
     ///
@@ -105,7 +105,7 @@ pub enum ValueKind {
     Bool,
 }
 
-impl Display for ValueKind {
+impl Display for Kind {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
             Self::String => f.write_str("String"),
