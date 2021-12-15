@@ -147,6 +147,7 @@ dependencies = [
 name = "eolina-rs"
 version = "0.1.0"
 dependencies = [
+ "atty",
  "clap",
  "color-eyre",
  "crossterm",

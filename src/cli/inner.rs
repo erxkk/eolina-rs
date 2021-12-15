@@ -6,9 +6,11 @@ use crate::{
 use clap::{App, Arg, Shell, SubCommand};
 use std::{collections::VecDeque, fs, io::Read};
 
+///
+/// Encapsualtes the whole command line application.
+///
 pub struct Eolina<'a, 'b> {
     app: App<'a, 'b>,
-    io: io::Io,
 }
 
 impl<'a, 'b> Eolina<'a, 'b> {
@@ -16,33 +18,40 @@ impl<'a, 'b> Eolina<'a, 'b> {
     /// Creates a new [`App`] to use for cli arg parsing.
     ///
     pub fn new() -> Eolina<'static, 'static> {
-        let shell_validator = |str: String| {
-            match str.as_bytes() {
-                b"bash" | b"evlish" | b"fish" | b"pwsh" | b"zsh" => Ok(()),
-                _=> Err(format!("Unknown or unsupported shell `{}`, supported shells are (bash/elvish/fish/pwsh/zsh)", str))
-            }
-        };
-
         let path_validator = |str: String| match fs::try_exists(&str) {
             Ok(exists) => {
                 if exists {
                     Ok(())
                 } else {
-                    Err(format!("Path does not exist: `{}`", str))
+                    Err(format!("path does not exist: `{}`", str))
                 }
             }
-            Err(err) => Err(format!("Cannot access path: `{}`", err)),
+            Err(err) => Err(format!("cannot access path: `{}`", err)),
         };
 
         let app = App::new("eolina-rs")
             .about("a cli interface for executing and interpreting eolina programs")
+            .arg(
+                Arg::with_name("color")
+                    .long("color")
+                    .short("c")
+                    .alias("colour")
+                    .takes_value(true)
+                    .default_value("auto")
+                    .possible_value("on")
+                    .possible_value("auto")
+                    .possible_value("off"),
+            )
             .subcommand(
                 SubCommand::with_name("exec")
                     .about("executes a program given in a file")
                     .arg(
                         Arg::with_name("file")
                             .required(true)
-                            .validator(path_validator),
+                            .validator(path_validator)
+                            .possible_value("always")
+                            .possible_value("auto")
+                            .possible_value("never"),
                     ),
             )
             .subcommand(
@@ -60,35 +69,57 @@ impl<'a, 'b> Eolina<'a, 'b> {
                     .arg(
                         Arg::with_name("shell")
                             .required(true)
-                            .validator(shell_validator),
+                            .possible_value("bash")
+                            .possible_value("elvish")
+                            .possible_value("fish")
+                            .possible_value("pwsh")
+                            .possible_value("zsh"),
                     )
                     .arg(Arg::with_name("path").required(true)),
             );
 
-        Eolina {
-            app,
-            io: Io::new(io::Mode::Lean),
-        }
+        Eolina { app }
     }
 
-    pub fn run(mut self) -> color_eyre::Result<()> {
+    pub fn run(self) -> color_eyre::Result<()> {
         // let clap handle --version/--help etc
         let matches = self.app.get_matches();
 
+        // TODO: move to separate function + color check
+        let mut io = Io::new(
+            match matches.value_of("color").expect("color has default value") {
+                "on" => {
+                    if atty::is(atty::Stream::Stdout) {
+                        io::Mode::Colorful
+                    } else {
+                        eyre::bail!("`color=on` is not allowed in non-tty env");
+                    }
+                }
+                "auto" => {
+                    if atty::is(atty::Stream::Stdout) {
+                        io::Mode::Colorful
+                    } else {
+                        io::Mode::Lean
+                    }
+                }
+                "off" => io::Mode::Lean,
+                _ => unreachable!(),
+            },
+        );
+
         // args are always Some() if a subcommand was used
         match matches.subcommand() {
-            ("exec", Some(args)) => cmd_exec(
-                &mut self.io,
-                args.value_of("file").expect("file is required"),
-            ),
+            ("exec", Some(args)) => {
+                cmd_exec(&mut io, args.value_of("file").expect("file is required"))
+            }
             ("eval", Some(args)) => cmd_eval(
-                &mut self.io,
+                &mut io,
                 args.value_of("program").expect("program is required"),
                 args.values_of("inputs"),
             ),
-            ("repl", Some(_)) => cmd_repl(&mut self.io),
+            ("repl", Some(_)) => cmd_repl(&mut io),
             ("completions", Some(args)) => cmd_completions(
-                &mut self.io,
+                &mut io,
                 args.value_of("shell").expect("shell is required"),
                 args.value_of("path").expect("path is required"),
             ),
@@ -139,8 +170,11 @@ fn cmd_eval<'a>(
     Ok(())
 }
 
-// TODO: make reply run a result
 fn cmd_repl(_io: &mut Io) -> color_eyre::Result<()> {
+    if atty::isnt(atty::Stream::Stdout) || atty::isnt(atty::Stream::Stdin) {
+        eyre::bail!("cannot start repl in a non-tty env");
+    }
+
     let mut context = repl::Context::new();
     context.run()
 }
