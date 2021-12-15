@@ -8,7 +8,6 @@ use super::{next_token, Token};
 ///
 #[derive(Debug)]
 pub struct Iter<'a> {
-    input: &'a str,
     slice: &'a str,
     error: bool,
 }
@@ -19,7 +18,6 @@ impl<'a> Iter<'a> {
     ///
     pub fn new(input: &'a str) -> Self {
         Self {
-            input,
             slice: input,
             error: false,
         }
@@ -48,7 +46,7 @@ impl<'a> Iterator for Iter<'a> {
                 }
                 Err(err) => {
                     self.error = true;
-                    Some(Err(err.into()))
+                    Some(Err(err))
                 }
             }
         }

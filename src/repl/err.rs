@@ -11,18 +11,6 @@ pub enum Error {
     UnknownCommand(String),
 
     ///
-    /// An error when a command is missing a parameter.
-    ///
-    #[error("missing param {0} at pos {1}")]
-    MissingCommandParameter(&'static str, usize),
-
-    ///
-    /// An error when an unknown program is attempted to be loaded.
-    ///
-    #[error("unknown program: `{0}`")]
-    UnknownProgramm(String),
-
-    ///
     /// An error during executor execution.
     ///
     #[error("exec error: {0}")]

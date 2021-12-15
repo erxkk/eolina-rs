@@ -4,7 +4,7 @@ use crate::{
     repl,
 };
 use clap::{App, Arg, Shell, SubCommand};
-use std::{fs, io::Read};
+use std::{collections::VecDeque, fs, io::Read};
 
 pub struct Eolina<'a, 'b> {
     app: App<'a, 'b>,
@@ -111,14 +111,14 @@ fn cmd_exec(io: &mut Io, path: &str) -> color_eyre::Result<()> {
         string
     };
 
+    let mut queue = VecDeque::new();
+
     // create an executor context
-    let mut context = exec::Context::new(input);
+    let context = exec::Context::new(&input, io, &mut queue);
 
     // eagerly collect/execute it
-    context.iter(io).collect::<Result<Vec<_>, _>>()?;
+    context.collect::<Result<Vec<_>, _>>()?;
 
-    // reset the context
-    context.reset();
     Ok(())
 }
 
@@ -128,22 +128,21 @@ fn cmd_eval<'a>(
     program: &'a str,
     _inputs: Option<impl Iterator<Item = &'a str>>,
 ) -> color_eyre::Result<()> {
+    let mut queue = VecDeque::new();
+
     // create an executor context
-    let mut context = exec::Context::new(program.to_owned());
+    let context = exec::Context::new(program, io, &mut queue);
 
     // eagerly collect/execute it
-    context.iter(io).collect::<Result<Vec<_>, _>>()?;
+    context.collect::<Result<Vec<_>, _>>()?;
 
-    // reset the context
-    context.reset();
     Ok(())
 }
 
 // TODO: make reply run a result
 fn cmd_repl(_io: &mut Io) -> color_eyre::Result<()> {
     let mut context = repl::Context::new();
-    context.run();
-    // Ok(())
+    context.run()
 }
 
 // TODO: make args optional

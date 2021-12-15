@@ -301,23 +301,29 @@ pub fn slice(input: Value, range: EolinaRange) -> Result<Value, Error> {
 
     // handle error cases
     let (lower, upper) = match (abs_lower, abs_upper) {
-        (Ok(ok), Err(err)) => return Err({
-            let translated = ok as isize..err;
-            Error::SliceOutOfRange(range.into(), translated.into(), len)
-        }),
-        (Err(err), Ok(ok)) => return Err({
-            let translated = err..ok as isize;
-            Error::SliceOutOfRange(range.into(), translated.into(), len)
-        }),
-        (Err(err_l), Err(err_u)) => return Err({
-            let translated = err_l..err_u;
-            Error::SliceOutOfRange(range.into(), translated.into(), len)
-        }),
+        (Ok(ok), Err(err)) => {
+            return Err({
+                let translated = ok as isize..err;
+                Error::SliceOutOfRange(range, translated.into(), len)
+            })
+        }
+        (Err(err), Ok(ok)) => {
+            return Err({
+                let translated = err..ok as isize;
+                Error::SliceOutOfRange(range, translated.into(), len)
+            })
+        }
+        (Err(err_l), Err(err_u)) => {
+            return Err({
+                let translated = err_l..err_u;
+                Error::SliceOutOfRange(range, translated.into(), len)
+            })
+        }
         (Ok(ok_l), Ok(ok_u)) => {
             if ok_l > ok_u {
                 return Err({
                     let translated = ok_l as isize..ok_u as isize;
-                    Error::SliceIncompatible(range.into(), translated.into(), len)
+                    Error::SliceIncompatible(range, translated.into(), len)
                 });
             } else {
                 (ok_l, ok_u)

@@ -1,6 +1,11 @@
 use super::Error;
-use crate::{exec::Context as ExecContext, io::Io, io::Kind, io::Mode};
-use std::{collections::HashMap, process};
+use crate::{
+    exec::{Context as ExecContext, Value},
+    io::Io,
+    io::Kind,
+    io::Mode,
+};
+use std::{collections::VecDeque, process};
 
 ///
 /// A repl context, used for storing and executing programs.
@@ -8,7 +13,7 @@ use std::{collections::HashMap, process};
 pub struct Context {
     io: Io,
     exec_io: Io,
-    execs: HashMap<String, ExecContext>,
+    values: VecDeque<Value>,
 }
 
 impl Context {
@@ -25,7 +30,7 @@ impl Context {
                 "[".to_owned(),
                 "]: ".to_owned(),
             ),
-            execs: HashMap::new(),
+            values: VecDeque::new(),
         }
     }
 
@@ -34,9 +39,11 @@ impl Context {
     ///
     /// ### Returns
     ///
-    /// This function does not return.
+    /// * [`Ok(())`] if the repl was run successful
+    /// * [`Err(string)`] if the repl failed or a exec failed
+    ///   * `string` contains the error reason
     ///
-    pub fn run(&mut self) -> ! {
+    pub fn run(&mut self) -> color_eyre::Result<()> {
         'outer: loop {
             let mut input = self.io.read_expect(">>> ", None);
 
@@ -60,34 +67,13 @@ impl Context {
                 continue 'outer;
             }
 
-            let mut exec = ExecContext::new(input);
-            if let Err(err) = self.run_exec(&mut exec) {
-                self.io.write_expect(Kind::Error, err, exec.input());
+            for res in ExecContext::new(&input, &mut self.exec_io, &mut self.values) {
+                if let Some(err) = res.err() {
+                    eyre::bail!(err);
+                }
             }
         }
     }
-
-    ///
-    /// Executes and then resets a given [`Executor`] for this context.
-    ///
-    /// ### Returns
-    ///
-    /// * [`Ok(())`] if the executor was executed successfully
-    /// * [`Err(string)`] if the executor could not be executed or reset
-    ///   * `string` contains the error reason
-    ///
-    fn run_exec<'a>(&mut self, exec: &mut ExecContext) -> color_eyre::Result<()> {
-        for res in exec.iter(&mut self.exec_io) {
-            if let Some(err) = res.err() {
-                eyre::bail!(err);
-            }
-        }
-
-        exec.reset();
-        Ok(())
-    }
-
-    // TODO: clean up command handling
 
     ///
     /// Executes a command for this context.
@@ -98,7 +84,7 @@ impl Context {
     /// * [`Err(string)`] if the command could not be executed
     ///   * `string` contains the error reason
     ///
-    fn command<'a>(&mut self, cmd: &'a str) -> color_eyre::Result<()> {
+    fn command(&mut self, cmd: &str) -> color_eyre::Result<()> {
         match cmd {
             "exit" | "quit" | "q" => process::exit(0),
             "help" | "h" | "?" => {
@@ -125,12 +111,6 @@ impl Context {
 
                 Ok(())
             }
-            "list" | "ls" => {
-                for (name, exec) in self.execs.iter() {
-                    println!("    {} # {}", name, exec.input());
-                }
-                Ok(())
-            }
             "example" | "eg" => {
                 self.io
                     .write_expect(Kind::Output, "<>            echo program", None);
@@ -143,66 +123,7 @@ impl Context {
                 );
                 Ok(())
             }
-            x => match x.as_bytes() {
-                [b's', b' ', ..] => {
-                    let x = &x[2..];
-                    if x.is_empty()
-                        || x.as_bytes()
-                            .iter()
-                            .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
-                    {
-                        eyre::bail!(Error::MissingCommandParameter("name", 0));
-                    } else if let Some(pos) = x.find(' ') {
-                        let (name, program) = x.split_at(pos);
-                        self.execs
-                            .insert(name.to_owned(), ExecContext::new(program[1..].to_owned()));
-                        Ok(())
-                    } else {
-                        eyre::bail!(Error::MissingCommandParameter("program", 1));
-                    }
-                }
-                [b'c', b' ', ..] => {
-                    let x = &x[2..];
-                    let mut iter = x.split_ascii_whitespace();
-
-                    let name = iter
-                        .next()
-                        .ok_or_else(|| Error::MissingCommandParameter("name", 0))?;
-
-                    // move out executor to avoid doublemutable borrow
-                    match self.execs.remove(name) {
-                        Some(mut exec) => {
-                            self.io.write_expect(
-                                Kind::Info,
-                                format!("running: `{}`", exec.input()),
-                                None,
-                            );
-
-                            let res = self.run_exec(&mut exec);
-                            self.execs.insert(name.to_string(), exec);
-                            res
-                        }
-                        None => eyre::bail!(Error::UnknownProgramm(x.to_owned())),
-                    }
-                }
-                [b'r', b' ', ..] => {
-                    let x = &x[2..];
-                    let mut iter = x.split_ascii_whitespace();
-
-                    let name = iter
-                        .next()
-                        .ok_or_else(|| Error::MissingCommandParameter("name", 0))?;
-
-                    match self.execs.remove(name) {
-                        Some(exec) => {
-                            println!("removed program: `{}`: {}", name, exec.input());
-                            Ok(())
-                        }
-                        None => eyre::bail!(Error::UnknownProgramm(x.to_owned())),
-                    }
-                }
-                _ => eyre::bail!(Error::UnknownCommand(x.to_owned())),
-            },
+            _ => eyre::bail!(Error::UnknownCommand(cmd.to_owned())),
         }
     }
 }

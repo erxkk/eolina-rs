@@ -40,11 +40,7 @@ impl Value {
     pub fn unwrap_string(self) -> Result<String, Error> {
         match self {
             Self::String(inner) => Ok(inner),
-            x => Err({
-                let expected: &'static [Kind] = &[Kind::String];
-                let actual = x.kind();
-                Error::ArgMismatch(expected, actual)
-            }),
+            x => Err(Error::ArgMismatch(&[Kind::String], x.kind())),
         }
     }
 
@@ -54,11 +50,7 @@ impl Value {
     pub fn unwrap_string_vec(self) -> Result<Vec<String>, Error> {
         match self {
             Self::StringVec(inner) => Ok(inner),
-            x => Err({
-                let expected: &'static [Kind] = &[Kind::StringVec];
-                let actual = x.kind();
-                Error::ArgMismatch(expected, actual)
-            }),
+            x => Err(Error::ArgMismatch(&[Kind::StringVec], x.kind())),
         }
     }
 
@@ -68,11 +60,7 @@ impl Value {
     pub fn unwrap_bool(self) -> Result<bool, Error> {
         match self {
             Self::Bool(inner) => Ok(inner),
-            x => Err({
-                let expected: &'static [Kind] = &[Kind::Bool];
-                let actual = x.kind();
-                Error::ArgMismatch(expected, actual)
-            }),
+            x => Err(Error::ArgMismatch(&[Kind::Bool], x.kind())),
         }
     }
 
@@ -83,11 +71,7 @@ impl Value {
         match self {
             Self::String(inner) => Ok(inner.len()),
             Self::StringVec(inner) => Ok(inner.len()),
-            x => Err({
-                let expected: &'static [Kind] = &[Kind::String];
-                let actual = x.kind();
-                Error::ArgMismatch(expected, actual)
-            }),
+            x => Err(Error::ArgMismatch(&[Kind::String], x.kind())),
         }
     }
 }

@@ -10,7 +10,6 @@ mod func;
 
 mod inner;
 pub use inner::Context;
-pub use inner::Iter;
 
 mod value;
 pub use value::Kind;

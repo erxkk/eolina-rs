@@ -286,19 +286,19 @@ pub enum Kind {
 
     ///
     /// Output is printed as information to [`Stdout`] or ignored
-    /// if the [`Context`] `stdout_mode` is set to [`Mode::Lean`] or below.
+    /// if the [`Io`] `stdout_mode` is set to [`Mode::Lean`] or below.
     ///
     Info = 1,
 
     ///
     /// Output is printed as warning to [`Stderr`] or ignored
-    /// if the [`Context`] `stderr_mode` is set to [`Mode::Lean`] or below.
+    /// if the [`Io`] `stderr_mode` is set to [`Mode::Lean`] or below.
     ///
     Warning = 2,
 
     ///
     /// Output is printed as error to [`Stderr`] or ignored
-    /// if the [`Context`] `stderr_mode` is set to [`Mode::Lean`] or below.
+    /// if the [`Io`] `stderr_mode` is set to [`Mode::Lean`] or below.
     ///
     Error = 3,
 }

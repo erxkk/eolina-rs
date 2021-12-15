@@ -1,37 +1,7 @@
 use std::{
     fmt::{self, Display, Formatter, Write},
-    ops::{Deref, Range, RangeFrom, RangeFull, RangeTo},
+    ops::{Range, RangeFrom, RangeFull, RangeTo},
 };
-
-///
-/// A struct that does not permit any mutable references to it's inner value.
-///
-#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Immutable<T>(T);
-
-impl<T> Immutable<T> {
-    ///
-    /// Creates a new [`Immutable`] to disallow mutable references.
-    ///
-    pub fn new(value: T) -> Self {
-        Self(value)
-    }
-
-    ///
-    /// Unwraps this [`Immutable`] into it's inner value.
-    ///
-    pub fn unwrap(this: Self) -> T {
-        this.0
-    }
-}
-
-impl<T> Deref for Immutable<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
 
 ///
 /// An extension trait for checking checking ascii chars for specific
@@ -315,41 +285,10 @@ impl EolinaRange {
     ///
     /// Creates a new [`EolinaRangeBound`] from the given bounds.
     ///
-    pub fn new(start: Option<EolinaRangeBound>, end: Option<EolinaRangeBound>) -> Self {
-        Self { start, end }
-    }
-
-    ///
-    /// Creates a new [`EolinaRangeBound`] from the given bounds.
-    ///
-    pub fn from_isize(start: Option<isize>, end: Option<isize>) -> Self {
-        Self {
-            start: start.map(|num| num.into()),
-            end: end.map(|num| num.into()),
-        }
-    }
-
-    ///
-    /// Creates a new [`EolinaRangeBound`] from the given bounds.
-    ///
-    pub fn from_components(start: Option<(bool, usize)>, end: Option<(bool, usize)>) -> Self {
+    pub fn components(start: Option<(bool, usize)>, end: Option<(bool, usize)>) -> Self {
         Self {
             start: start.map(|(rel, num)| EolinaRangeBound::from_components(rel, num)),
             end: end.map(|(rel, num)| EolinaRangeBound::from_components(rel, num)),
-        }
-    }
-
-    ///
-    /// Applies a the given mapping functions to both bounds if they are [`Some`].
-    ///
-    pub fn map(
-        self,
-        f_start: impl Fn(EolinaRangeBound) -> EolinaRangeBound,
-        f_end: impl Fn(EolinaRangeBound) -> EolinaRangeBound,
-    ) -> Self {
-        Self {
-            start: self.start.map(f_start),
-            end: self.end.map(f_end),
         }
     }
 }

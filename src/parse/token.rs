@@ -314,7 +314,7 @@ pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token)> {
     } else if let Ok((rest, (first, second))) = slice_res {
         Ok((
             rest,
-            Token::Slice(EolinaRange::from_components(
+            Token::Slice(EolinaRange::components(
                 first.map(|(sign, num)| {
                     (sign.is_some(), num.parse().expect("combinator must fail"))
                 }),

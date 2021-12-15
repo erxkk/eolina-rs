@@ -1,52 +1,32 @@
 use super::{func, Error, Value};
 use crate::{
-    helper::Immutable,
     io::{Io, Kind},
     parse::{Iter as TokenIter, Token},
 };
-use std::{collections::VecDeque, ops::Deref};
+use std::collections::VecDeque;
 
 ///
 /// The excution context for a program.
 ///
 #[derive(Debug)]
-pub struct Context {
-    // this type is used as a marker that this will never be mutated
-    // through a reference
-    input: Immutable<String>,
-    values: VecDeque<Value>,
+pub struct Context<'p, 'io, 'v> {
+    input: &'p str,
+    io: &'io mut Io,
+    tokens: TokenIter<'p>,
+    values: &'v mut VecDeque<Value>,
 }
 
-impl Context {
+impl<'p, 'io, 'v> Context<'p, 'io, 'v> {
     ///
     /// Creates a new [`Context`] with the given `tokens` and an empty queue.
     ///
-    pub fn new(input: String) -> Self {
+    pub fn new(input: &'p str, io: &'io mut Io, values: &'v mut VecDeque<Value>) -> Self {
         Self {
-            input: Immutable::new(input),
-            values: VecDeque::new(),
+            input,
+            io,
+            tokens: TokenIter::new(input),
+            values,
         }
-    }
-
-    ///
-    /// Returns the input this interpreter is interpreting.
-    ///
-    pub fn input(&self) -> &str {
-        &self.input
-    }
-
-    ///
-    /// Returns the current values.
-    ///
-    pub fn values(&self) -> &VecDeque<Value> {
-        &self.values
-    }
-
-    ///
-    /// Resets this executor, resetting it's values.
-    ///
-    pub fn reset(&mut self) {
-        self.values.clear();
     }
 
     ///
@@ -60,16 +40,16 @@ impl Context {
     ///   * `error` will contain an error of kind `EmptyQueue`
     ///
     fn pop_queue(&mut self) -> color_eyre::Result<Value> {
-        Ok(self.values.pop_front().ok_or_else(|| Error::QueueEmpty)?)
+        Ok(self.values.pop_front().ok_or(Error::QueueEmpty)?)
     }
 
     ///
     /// Advances to the next token.
     ///
-    fn next_token(&mut self, io: &mut Io, token: Token) -> color_eyre::Result<()> {
+    fn next_token(&mut self, token: Token) -> color_eyre::Result<()> {
         match token {
             Token::In => {
-                let mut val = io.read_expect(" in", &**self.input);
+                let mut val = self.io.read_expect(" in", self.input);
 
                 // truncate the '\n'
                 if val.ends_with('\n') {
@@ -80,7 +60,7 @@ impl Context {
             }
             Token::Out => {
                 let val = self.pop_queue()?;
-                io.write_expect(Kind::Output, val, &**self.input);
+                self.io.write_expect(Kind::Output, val, self.input);
             }
             Token::Rotate(num) => {
                 self.values.rotate_left(num);
@@ -145,48 +125,10 @@ impl Context {
         }
         Ok(())
     }
-
-    ///
-    /// Returns an [`Iter`] that parses and executes the instructions lazily.
-    ///
-    pub fn iter<'b>(&mut self, io: &'b mut Io) -> Iter<'_, 'b> {
-        Iter::new(self, io)
-    }
-}
-
-#[derive(Debug)]
-pub struct Iter<'a, 'b> {
-    exec: &'a mut Context,
-    io: &'b mut Io,
-    tokens: TokenIter<'a>,
-}
-
-impl<'a, 'b> Iter<'a, 'b> {
-    ///
-    /// Creates a new [`Iter`] for the given [`Context`] and [`Io`] or [`None`].
-    ///
-    fn new(exec: &'a mut Context, io: &'b mut Io) -> Self {
-        // RefCell can be used here to borrow only immutably, but this has some dynamic overhead
-        // and comes with the possibility of accidently borrowing it mutably later one anyway
-
-        // SAFTEY:
-        // * The String is not mutated by this `ExecutorIter`
-        // * The lifetime of the String is tied to it's executors lifetime,
-        //   and therefore at least valid for as long as this mutable refernce
-        // * The String is never mutated after it's creation because it is wrapped in `Immutable`
-        let slice: &'a str =
-            unsafe { std::mem::transmute(AsRef::<str>::as_ref(exec.input.deref())) };
-
-        Self {
-            exec,
-            io,
-            tokens: TokenIter::new(slice),
-        }
-    }
 }
 
 // TODO: use a generator here at some point
-impl<'a, 'b> Iterator for Iter<'a, 'b> {
+impl<'p, 'io, 'v> Iterator for Context<'p, 'io, 'v> {
     type Item = color_eyre::Result<()>;
     ///
     /// Attempts parsing and executing the next instruction.
@@ -204,7 +146,7 @@ impl<'a, 'b> Iterator for Iter<'a, 'b> {
             None
         } else {
             match self.tokens.next()? {
-                Ok(token) => Some(self.exec.next_token(self.io, token)),
+                Ok(token) => Some(self.next_token(token)),
                 Err(inner) => Some(Err(inner)),
             }
         }

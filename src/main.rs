@@ -9,7 +9,6 @@ mod parse;
 mod repl;
 
 fn main() -> color_eyre::Result<()> {
-    // TODO: reduce repl to one running program with stepwise execution
     // TODO: fancy parsing error reporting via miette
     // TODO: use raw terminal to allow reply history?
 
