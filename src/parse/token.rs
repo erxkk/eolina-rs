@@ -190,7 +190,8 @@ impl Display for Token {
 /// * [`Err(error)`] if unable to parse a token
 ///   * `error` contains the [`Error`]
 ///
-pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token)> {
+pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token, usize)> {
+    let tirmlen = 0;
     // ignore whitespace, treat whitespace as empty
     let input = input.trim_start_matches(|ch: char| ch.is_ascii_whitespace());
     if input.is_empty() {
@@ -279,17 +280,20 @@ pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token)> {
                 "^" => Token::IsUpper,
                 _ => unimplemented!("missing single branches"),
             },
+            tirmlen + 1,
         ))
-    } else if let Ok((rest, (first, second))) = double_res {
+    } else if let Ok((rest, (_, second))) = double_res {
         Ok((
             rest,
-            match (first, second) {
-                ("@", x) => Token::Rotate(x.parse().unwrap_or(1)),
-                _ => unreachable!(),
-            },
+            Token::Rotate(second.parse().unwrap_or(1)),
+            tirmlen + 1 + second.len(),
         ))
     } else if let Ok((rest, optional)) = split_res {
-        Ok((rest, Token::Split(optional.map(ToOwned::to_owned))))
+        Ok((
+            rest,
+            Token::Split(optional.map(ToOwned::to_owned)),
+            tirmlen + optional.map(|str| str.len() + 2).unwrap_or(2),
+        ))
     } else if let Ok((rest, parsed)) = map_res {
         Ok((
             rest,
@@ -299,6 +303,7 @@ pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token)> {
                 "%" => Token::Map(Map::Swap),
                 _ => unimplemented!("missing map branches"),
             },
+            tirmlen + 3,
         ))
     } else if let Ok((rest, parsed)) = filter_res {
         Ok((
@@ -310,18 +315,26 @@ pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token)> {
                 "^" => Token::Filter(Check::Upper),
                 _ => unimplemented!("missing filter branches"),
             },
+            tirmlen + 3,
         ))
     } else if let Ok((rest, (first, second))) = slice_res {
+        let parser = |(sign, num): (Option<&str>, &str)| {
+            (sign.is_some(), num.parse().expect("combinator must fail"))
+        };
+
+        let counter =
+            |(sign, num): (Option<&str>, &str)| num.len() + if sign.is_some() { 1 } else { 0 };
+
         Ok((
             rest,
             Token::Slice(EolinaRange::components(
-                first.map(|(sign, num)| {
-                    (sign.is_some(), num.parse().expect("combinator must fail"))
-                }),
-                second.map(|(sign, num)| {
-                    (sign.is_some(), num.parse().expect("combinator must fail"))
-                }),
+                first.map(parser),
+                second.map(parser),
             )),
+            tirmlen
+                + 3
+                + first.map(counter).unwrap_or_default()
+                + second.map(counter).unwrap_or_default(),
         ))
     } else {
         Err(Error::Unknown(input.to_owned()).into())
@@ -334,76 +347,79 @@ mod test {
 
     #[test]
     fn single() {
-        assert_eq!(next_token("<").unwrap(), ("", Token::In));
-        assert_eq!(next_token(">").unwrap(), ("", Token::Out));
-        assert_eq!(next_token(".").unwrap(), ("", Token::Join));
-        assert_eq!(next_token("v").unwrap(), ("", Token::IsVowel));
-        assert_eq!(next_token("c").unwrap(), ("", Token::IsConso));
-        assert_eq!(next_token("_").unwrap(), ("", Token::IsLower));
-        assert_eq!(next_token("^").unwrap(), ("", Token::IsUpper));
+        assert_eq!(next_token("<").unwrap(), ("", Token::In, 1));
+        assert_eq!(next_token(">").unwrap(), ("", Token::Out, 1));
+        assert_eq!(next_token(".").unwrap(), ("", Token::Join, 1));
+        assert_eq!(next_token("v").unwrap(), ("", Token::IsVowel, 1));
+        assert_eq!(next_token("c").unwrap(), ("", Token::IsConso, 1));
+        assert_eq!(next_token("_").unwrap(), ("", Token::IsLower, 1));
+        assert_eq!(next_token("^").unwrap(), ("", Token::IsUpper, 1));
     }
 
     #[test]
     fn split() {
-        assert_eq!(next_token("//").unwrap(), ("", Token::Split(None)));
+        assert_eq!(next_token("//").unwrap(), ("", Token::Split(None), 2));
         assert_eq!(
             next_token("/\"\"/").unwrap(),
-            ("", Token::Split(Some("".to_owned())))
+            ("", Token::Split(Some("".to_owned())), 4)
         );
         assert_eq!(
             next_token("/\"aa\"/").unwrap(),
-            ("", Token::Split(Some("aa".to_owned())))
+            ("", Token::Split(Some("aa".to_owned())), 6)
         );
     }
 
     #[test]
     fn dobule() {
-        assert_eq!(next_token("@").unwrap(), ("", Token::Rotate(1)));
-        assert_eq!(next_token("@1").unwrap(), ("", Token::Rotate(1)));
-        assert_eq!(next_token("@3").unwrap(), ("", Token::Rotate(3)));
+        assert_eq!(next_token("@").unwrap(), ("", Token::Rotate(1), 1));
+        assert_eq!(next_token("@1").unwrap(), ("", Token::Rotate(1), 2));
+        assert_eq!(next_token("@3").unwrap(), ("", Token::Rotate(3), 2));
     }
 
     #[test]
     fn map() {
-        assert_eq!(next_token("{_}").unwrap(), ("", Token::Map(Map::Lower)));
-        assert_eq!(next_token("{^}").unwrap(), ("", Token::Map(Map::Upper)));
-        assert_eq!(next_token("{%}").unwrap(), ("", Token::Map(Map::Swap)));
+        assert_eq!(next_token("{_}").unwrap(), ("", Token::Map(Map::Lower), 3));
+        assert_eq!(next_token("{^}").unwrap(), ("", Token::Map(Map::Upper), 3));
+        assert_eq!(next_token("{%}").unwrap(), ("", Token::Map(Map::Swap), 3));
     }
 
     #[test]
     fn filter() {
         assert_eq!(
             next_token("[v]").unwrap(),
-            ("", Token::Filter(Check::Vowel))
+            ("", Token::Filter(Check::Vowel), 3)
         );
         assert_eq!(
             next_token("[c]").unwrap(),
-            ("", Token::Filter(Check::Conso))
+            ("", Token::Filter(Check::Conso), 3)
         );
         assert_eq!(
             next_token("[_]").unwrap(),
-            ("", Token::Filter(Check::Lower))
+            ("", Token::Filter(Check::Lower), 3)
         );
         assert_eq!(
             next_token("[^]").unwrap(),
-            ("", Token::Filter(Check::Upper))
+            ("", Token::Filter(Check::Upper), 3)
         );
     }
 
     #[test]
     fn slice_pos() {
-        assert_eq!(next_token("|.|").unwrap(), ("", Token::Slice((..).into())));
+        assert_eq!(
+            next_token("|.|").unwrap(),
+            ("", Token::Slice((..).into()), 3)
+        );
         assert_eq!(
             next_token("|.42|").unwrap(),
-            ("", Token::Slice((..42).into()))
+            ("", Token::Slice((..42).into()), 5)
         );
         assert_eq!(
             next_token("|42.|").unwrap(),
-            ("", Token::Slice((42..).into()))
+            ("", Token::Slice((42..).into()), 5)
         );
         assert_eq!(
             next_token("|42.42|").unwrap(),
-            ("", Token::Slice((42..42).into()))
+            ("", Token::Slice((42..42).into()), 7)
         );
     }
 
@@ -411,23 +427,26 @@ mod test {
     fn slice_neg() {
         assert_eq!(
             next_token("|.-42|").unwrap(),
-            ("", Token::Slice((..-42).into()))
+            ("", Token::Slice((..-42).into()), 6)
         );
         assert_eq!(
             next_token("|-42.|").unwrap(),
-            ("", Token::Slice((-42..).into()))
+            ("", Token::Slice((-42..).into()), 6)
         );
         assert_eq!(
             next_token("|-42.-42|").unwrap(),
-            ("", Token::Slice((-42..-42).into()))
+            ("", Token::Slice((-42..-42).into()), 9)
         );
     }
 
     #[test]
     fn repeating() {
-        assert_eq!(next_token("<>//|.|").unwrap(), (">//|.|", Token::In));
-        assert_eq!(next_token(">//|.|").unwrap(), ("//|.|", Token::Out));
-        assert_eq!(next_token("//|.|").unwrap(), ("|.|", Token::Split(None)));
-        assert_eq!(next_token("|.|").unwrap(), ("", Token::Slice((..).into())));
+        assert_eq!(next_token("<>//|.|").unwrap(), (">//|.|", Token::In, 1));
+        assert_eq!(next_token(">//|.|").unwrap(), ("//|.|", Token::Out, 1));
+        assert_eq!(next_token("//|.|").unwrap(), ("|.|", Token::Split(None), 2));
+        assert_eq!(
+            next_token("|.|").unwrap(),
+            ("", Token::Slice((..).into()), 3)
+        );
     }
 }

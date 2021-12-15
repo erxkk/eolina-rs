@@ -22,13 +22,17 @@ impl Context {
     ///
     pub fn new() -> Self {
         Self {
-            io: Io::with(Mode::Colorful, None, None, "[".to_owned(), "]: ".to_owned()),
+            io: Io::with(
+                Mode::Lean,
+                (None, None),
+                (None, None),
+                ("[".to_owned(), "]: ".to_owned()),
+            ),
             exec_io: Io::with(
-                Mode::Colorful,
-                "[".to_owned(),
-                "]: ".to_owned(),
-                "[".to_owned(),
-                "]: ".to_owned(),
+                Mode::Lean,
+                ("[".to_owned(), "]: ".to_owned()),
+                ("[".to_owned(), "]: ".to_owned()),
+                ("[".to_owned(), "]: ".to_owned()),
             ),
             values: VecDeque::new(),
         }
@@ -40,12 +44,11 @@ impl Context {
     /// ### Returns
     ///
     /// * [`Ok(())`] if the repl was run successful
-    /// * [`Err(string)`] if the repl failed or a exec failed
-    ///   * `string` contains the error reason
+    /// * [`Err(_)`] if the repl failed
     ///
     pub fn run(&mut self) -> color_eyre::Result<()> {
         'outer: loop {
-            let mut input = self.io.read_expect(">>> ", None);
+            let mut input = self.io.read_expect(">>> ");
 
             // truncate the '\n'
             if input.ends_with('\n') {
@@ -61,7 +64,7 @@ impl Context {
                 match self.command(input) {
                     Ok(_) => {}
                     Err(err) => {
-                        self.io.write_expect(Kind::Error, err, None);
+                        self.io.write_expect(Kind::Error, None, err);
                     }
                 }
                 continue 'outer;
@@ -69,7 +72,8 @@ impl Context {
 
             for res in ExecContext::new(&input, &mut self.exec_io, &mut self.values) {
                 if let Some(err) = res.err() {
-                    eyre::bail!(err);
+                    self.io.write_expect(Kind::Error, None, err);
+                    continue 'outer;
                 }
             }
         }
@@ -90,36 +94,36 @@ impl Context {
             "help" | "h" | "?" => {
                 // TODO: see multiline handling in crate::io
                 self.io
-                    .write_expect(Kind::Output, "exit | quit | q    exits the program", None);
+                    .write_expect(Kind::Output, None, "exit | quit | q    exits the program");
                 self.io
-                    .write_expect(Kind::Output, "help | h | ?       prints all commands", None);
+                    .write_expect(Kind::Output, None, "help | h | ?       prints all commands");
                 self.io.write_expect(
                     Kind::Output,
+                    None,
                     "s                  saves a program `!s sort <*[^][_]~>`",
-                    None,
                 );
                 self.io.write_expect(
                     Kind::Output,
+                    None,
                     "c                  calls a program `!s sort`",
-                    None,
                 );
                 self.io.write_expect(
                     Kind::Output,
-                    "r                  removes a program `!r sort`",
                     None,
+                    "r                  removes a program `!r sort`",
                 );
 
                 Ok(())
             }
             "example" | "eg" => {
                 self.io
-                    .write_expect(Kind::Output, "<>            echo program", None);
+                    .write_expect(Kind::Output, None, "<>            echo program");
                 self.io
-                    .write_expect(Kind::Output, "<*>>          duplicate echo", None);
+                    .write_expect(Kind::Output, None, "<*>>          duplicate echo");
                 self.io.write_expect(
                     Kind::Output,
-                    "<*[^][_]~>    orders by case, upper first",
                     None,
+                    "<*[^][_]~>    orders by case, upper first",
                 );
                 Ok(())
             }

@@ -1,4 +1,4 @@
-#![feature(derive_default_enum, path_try_exists)]
+#![feature(derive_default_enum, path_try_exists, explicit_generic_args_with_impl_trait)]
 #![allow(dead_code)]
 
 mod cli;

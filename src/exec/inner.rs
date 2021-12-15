@@ -3,6 +3,7 @@ use crate::{
     io::{Io, Kind},
     parse::{Iter as TokenIter, Token},
 };
+use crossterm::style::Stylize;
 use std::collections::VecDeque;
 
 ///
@@ -10,6 +11,7 @@ use std::collections::VecDeque;
 ///
 #[derive(Debug)]
 pub struct Context<'p, 'io, 'v> {
+    prev_len: usize,
     input: &'p str,
     io: &'io mut Io,
     tokens: TokenIter<'p>,
@@ -22,6 +24,7 @@ impl<'p, 'io, 'v> Context<'p, 'io, 'v> {
     ///
     pub fn new(input: &'p str, io: &'io mut Io, values: &'v mut VecDeque<Value>) -> Self {
         Self {
+            prev_len: 0,
             input,
             io,
             tokens: TokenIter::new(input),
@@ -44,12 +47,30 @@ impl<'p, 'io, 'v> Context<'p, 'io, 'v> {
     }
 
     ///
+    /// Returns a colored [`String`] indicating where the programm is curently in execution.
+    ///
+    /// ### Returns
+    ///
+    /// Returns the stylized [`String`].
+    ///
+    /// ### Panics
+    /// Panics if the program was not yet started or is empty.
+    ///
+    fn get_context(&self) -> String {
+        let (s, r) = self.input.split_at(self.prev_len - 1);
+        let c = &r[0..1];
+        let r = &r[1..];
+
+        format!("{}{}{}", s, c.green(), r)
+    }
+
+    ///
     /// Advances to the next token.
     ///
     fn next_token(&mut self, token: Token) -> color_eyre::Result<()> {
         match token {
             Token::In => {
-                let mut val = self.io.read_expect(" in", self.input);
+                let mut val = self.io.read_expect(self.get_context().as_str());
 
                 // truncate the '\n'
                 if val.ends_with('\n') {
@@ -60,7 +81,8 @@ impl<'p, 'io, 'v> Context<'p, 'io, 'v> {
             }
             Token::Out => {
                 let val = self.pop_queue()?;
-                self.io.write_expect(Kind::Output, val, self.input);
+                self.io
+                    .write_expect(Kind::Output, self.get_context().as_str(), val);
             }
             Token::Rotate(num) => {
                 self.values.rotate_left(num);
@@ -146,7 +168,10 @@ impl<'p, 'io, 'v> Iterator for Context<'p, 'io, 'v> {
             None
         } else {
             match self.tokens.next()? {
-                Ok(token) => Some(self.next_token(token)),
+                Ok((token, pos)) => {
+                    self.prev_len += pos;
+                    Some(self.next_token(token))
+                }
                 Err(inner) => Some(Err(inner)),
             }
         }

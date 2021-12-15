@@ -18,9 +18,11 @@ pub struct Io {
     pub out_post_prompt: Option<String>,
     pub in_pre_prompt: Option<String>,
     pub in_post_prompt: Option<String>,
-    pub stdout_mode: Mode,
-    pub stdin_mode: Mode,
-    pub stderr_mode: Mode,
+    pub log_pre_prompt: Option<String>,
+    pub log_post_prompt: Option<String>,
+    pub in_mode: Mode,
+    pub out_mode: Mode,
+    pub log_mode: Mode,
 }
 
 impl Io {
@@ -36,9 +38,11 @@ impl Io {
             in_post_prompt: None,
             out_pre_prompt: None,
             out_post_prompt: None,
-            stdin_mode: mode,
-            stdout_mode: mode,
-            stderr_mode: mode,
+            log_pre_prompt: None,
+            log_post_prompt: None,
+            in_mode: mode,
+            out_mode: mode,
+            log_mode: mode,
         }
     }
 
@@ -47,22 +51,27 @@ impl Io {
     ///
     pub fn with(
         mode: Mode,
-        in_pre_prompt: impl Into<Option<String>>,
-        in_post_prompt: impl Into<Option<String>>,
-        out_pre_prompt: impl Into<Option<String>>,
-        out_post_prompt: impl Into<Option<String>>,
+        in_prompts: (impl Into<Option<String>>, impl Into<Option<String>>),
+        out_prompts: (impl Into<Option<String>>, impl Into<Option<String>>),
+        log_prompts: (impl Into<Option<String>>, impl Into<Option<String>>),
     ) -> Self {
+        let (in_pre_prompt, in_post_prompt) = (in_prompts.0.into(), in_prompts.1.into());
+        let (out_pre_prompt, out_post_prompt) = (out_prompts.0.into(), out_prompts.1.into());
+        let (log_pre_prompt, log_post_prompt) = (log_prompts.0.into(), log_prompts.1.into());
+
         Self {
             stdin: io::stdin(),
             stdout: io::stdout(),
             stderr: io::stderr(),
-            out_pre_prompt: out_pre_prompt.into(),
-            out_post_prompt: out_post_prompt.into(),
-            in_pre_prompt: in_pre_prompt.into(),
-            in_post_prompt: in_post_prompt.into(),
-            stdin_mode: mode,
-            stdout_mode: mode,
-            stderr_mode: mode,
+            in_pre_prompt,
+            in_post_prompt,
+            out_pre_prompt,
+            out_post_prompt,
+            log_pre_prompt,
+            log_post_prompt,
+            in_mode: mode,
+            out_mode: mode,
+            log_mode: mode,
         }
     }
 
@@ -74,16 +83,8 @@ impl Io {
     /// Panics if writing to [`Stdout`] was unsuccessful.
     /// Panics if reading from [`Stdin`] was unsuccessful.
     ///
-    pub fn read_expect<'a, 'b, T>(
-        &mut self,
-        prompt: impl Into<Option<T>>,
-        context: impl Into<Option<&'b str>>,
-    ) -> String
-    where
-        T: Stylize + Display,
-        T::Styled: Display,
-    {
-        self.read(prompt, context).expect("io failure")
+    pub fn read_expect<'a, 'b>(&mut self, prompt: impl Into<Option<&'a str>>) -> String {
+        self.read(prompt).expect("io failure")
     }
 
     ///
@@ -97,30 +98,15 @@ impl Io {
     /// * [`Err(error)`] if writing and reading failed
     ///   * `error` contains the [`io::Error`]
     ///
-    pub fn read<'a, 'b, T>(
-        &mut self,
-        prompt: impl Into<Option<T>>,
-        context: impl Into<Option<&'b str>>,
-    ) -> io::Result<String>
-    where
-        T: Stylize + Display,
-        T::Styled: Display,
-    {
-        if self.stdout_mode >= Mode::Prompt {
-            if let Some(context) = context.into() {
-                if matches!(self.stdout_mode, Mode::Colorful) {
-                    write!(self.stdout, "[`{}`] ", context.grey())?;
-                } else {
-                    write!(self.stdout, "[`{}`] ", context)?;
-                }
-            }
-
+    pub fn read<'a, 'b>(&mut self, prompt: impl Into<Option<&'a str>>) -> io::Result<String> {
+        // use `in_mode` as the prompts are for the reading input
+        if self.in_mode >= Mode::Prompt {
             if let Some(prompt) = prompt.into() {
                 if let Some(pre_prompt) = &self.in_pre_prompt {
                     write!(self.stdout, "{}", pre_prompt)?;
                 }
 
-                if matches!(self.stdout_mode, Mode::Colorful) {
+                if matches!(self.in_mode, Mode::Colorful) {
                     write!(self.stdout, "{}", prompt.white())?;
                 } else {
                     write!(self.stdout, "{}", prompt)?;
@@ -147,13 +133,13 @@ impl Io {
     ///
     /// Panics if writing to [`Stdout`] was unsuccessful.
     ///
-    pub fn write_expect<'b>(
+    pub fn write_expect<'a, 'b>(
         &mut self,
         kind: Kind,
+        prompt: impl Into<Option<&'a str>>,
         msg: impl Display,
-        context: impl Into<Option<&'b str>>,
     ) {
-        self.write(kind, msg, context).expect("io failure")
+        self.write(kind, prompt, msg).expect("io failure")
     }
 
     ///
@@ -166,74 +152,82 @@ impl Io {
     /// * [`Err(error)`] if writing failed
     ///   * `error` contains the [`io::Error`]
     ///
-    pub fn write<'b>(
+    pub fn write<'a, 'b>(
         &mut self,
         kind: Kind,
+        prompt: impl Into<Option<&'a str>>,
         msg: impl Display,
-        context: impl Into<Option<&'b str>>,
     ) -> io::Result<()> {
         match kind {
-            Kind::Output | Kind::Info if self.stdout_mode == Mode::Muted => return Ok(()),
-            Kind::Warning | Kind::Error if self.stderr_mode == Mode::Muted => return Ok(()),
+            Kind::Output if self.out_mode == Mode::Muted => return Ok(()),
+            Kind::Info | Kind::Warning | Kind::Error if self.log_mode == Mode::Muted => {
+                return Ok(())
+            }
             _ => {}
         }
 
         let (buffer, mode, prompt): (&mut dyn Write, _, _) = match kind {
             Kind::Output => (
                 &mut self.stdout,
-                self.stdout_mode,
-                match self.stdout_mode {
-                    Mode::Prompt => Some("out".white()),
-                    Mode::Colorful => Some("out".white()),
-                    _ => None,
-                },
+                self.out_mode,
+                prompt
+                    .into()
+                    .map(|prompt| prompt.stylize())
+                    .or_else(|| match self.out_mode {
+                        Mode::Prompt => Some("out".white()),
+                        Mode::Colorful => Some("out".white()),
+                        _ => unreachable!("invalid mode propagated"),
+                    }),
             ),
             Kind::Info => (
                 &mut self.stdout,
-                self.stdout_mode,
-                match self.stdout_mode {
-                    Mode::Prompt => Some("info".white()),
-                    Mode::Colorful => Some("info".green()),
-                    _ => None,
-                },
+                self.log_mode,
+                prompt
+                    .into()
+                    .map(|prompt| prompt.stylize())
+                    .or_else(|| match self.log_mode {
+                        Mode::Prompt => Some("info".white()),
+                        Mode::Colorful => Some("info".green()),
+                        _ => unreachable!("invalid mode propagated"),
+                    }),
             ),
             Kind::Warning => (
                 &mut self.stderr,
-                self.stderr_mode,
-                match self.stderr_mode {
-                    Mode::Prompt => Some("warn".white()),
-                    Mode::Colorful => Some("warn".yellow()),
-                    _ => None,
-                },
+                self.log_mode,
+                prompt
+                    .into()
+                    .map(|prompt| prompt.stylize())
+                    .or_else(|| match self.log_mode {
+                        Mode::Prompt => Some("warn".white()),
+                        Mode::Colorful => Some("warn".yellow()),
+                        _ => unreachable!("invalid mode propagated"),
+                    }),
             ),
             Kind::Error => (
                 &mut self.stderr,
-                self.stderr_mode,
-                match self.stderr_mode {
-                    Mode::Prompt => Some("error".white()),
-                    Mode::Colorful => Some("error".red()),
-                    _ => None,
-                },
+                self.log_mode,
+                prompt
+                    .into()
+                    .map(|prompt| prompt.stylize())
+                    .or_else(|| match self.log_mode {
+                        Mode::Prompt => Some("error".white()),
+                        Mode::Colorful => Some("error".red()),
+                        _ => unreachable!("invalid mode propagated"),
+                    }),
             ),
         };
 
-        if let Some(context) = context.into() {
-            if matches!(mode, Mode::Colorful) {
-                write!(buffer, "[`{}`] ", context.grey())?;
-            } else {
-                write!(buffer, "[`{}`] ", context)?;
-            }
-        }
+        if mode > Mode::Lean {
+            if let Some(prompt) = prompt {
+                if let Some(pre_prompt) = &self.out_pre_prompt {
+                    write!(buffer, "{}", pre_prompt)?;
+                }
 
-        if let Some(prompt) = prompt {
-            if let Some(pre_prompt) = &self.out_pre_prompt {
-                write!(buffer, "{}", pre_prompt)?;
-            }
+                write!(buffer, "{}", prompt)?;
 
-            write!(buffer, "{}", prompt)?;
-
-            if let Some(post_prompt) = &self.out_post_prompt {
-                write!(buffer, "{}", post_prompt)?;
+                if let Some(post_prompt) = &self.out_post_prompt {
+                    write!(buffer, "{}", post_prompt)?;
+                }
             }
         }
 

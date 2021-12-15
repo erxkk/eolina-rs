@@ -29,20 +29,27 @@ impl<'a> Iter<'a> {
     pub fn error(&self) -> bool {
         self.error
     }
+
+    ///
+    /// Returns whether this iterator has previously yielded an [`Err`].
+    ///
+    pub fn slice(&self) -> &'a str {
+        self.slice
+    }
 }
 
 impl<'a> Iterator for Iter<'a> {
-    type Item = color_eyre::Result<Token>;
+    type Item = color_eyre::Result<(Token, usize)>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.error || self.slice.is_empty() {
             None
         } else {
             match next_token(self.slice) {
-                Ok((rest, token)) => {
+                Ok((rest, token, pos)) => {
                     self.slice = rest.trim_matches(|ch: char| ch.is_ascii_whitespace());
                     self.error = false;
-                    Some(Ok(token))
+                    Some(Ok((token, pos)))
                 }
                 Err(err) => {
                     self.error = true;
@@ -67,10 +74,10 @@ mod test {
         assert_eq!(
             tokens,
             vec![
-                Token::In,
-                Token::Out,
-                Token::Split(None),
-                Token::Slice((..).into())
+                (Token::In, 1),
+                (Token::Out, 1),
+                (Token::Split(None), 2),
+                (Token::Slice((..).into()), 3)
             ]
         );
     }
