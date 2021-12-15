@@ -9,7 +9,7 @@ use nom::{
     sequence::{delimited, pair, separated_pair},
     Err as NomErr,
 };
-use std::fmt::Display;
+use std::fmt::{self, Display, Formatter};
 
 ///
 /// A filter or map token, a token between `[` and `]`.
@@ -38,7 +38,7 @@ pub enum Check {
 }
 
 impl Display for Check {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Vowel => f.write_str("[v]"),
             Self::Conso => f.write_str("[c]"),
@@ -70,7 +70,7 @@ pub enum Map {
 }
 
 impl Display for Map {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Lower => f.write_str("{_}"),
             Self::Upper => f.write_str("{^}"),
@@ -156,7 +156,7 @@ pub enum Token {
 }
 
 impl Display for Token {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::In => f.write_str("<"),
             Self::Out => f.write_str(">"),
@@ -190,11 +190,11 @@ impl Display for Token {
 /// * [`Err(error)`] if unable to parse a token
 ///   * `error` contains the [`Error`]
 ///
-pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
+pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token)> {
     // ignore whitespace, treat whitespace as empty
     let input = input.trim_start_matches(|ch: char| ch.is_ascii_whitespace());
     if input.is_empty() {
-        return Err(Error::empty());
+        return Err(Error::Empty.into());
     }
 
     let single = (
@@ -324,7 +324,7 @@ pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
             )),
         ))
     } else {
-        Err(Error::unknown(input.to_owned()))
+        Err(Error::Unknown(input.to_owned()).into())
     }
 }
 

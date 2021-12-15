@@ -8,106 +8,14 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 ///
 /// Represents an error that can occur during program execution.
 ///
-#[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
-pub struct Error {
-    repr: ErrorKind,
-}
-
-impl Error {
-    ///
-    /// Creates a new [`Error`] for a parse error with the given inner [`parse::Error`].
-    ///
-    pub fn parse(inner: parse::Error) -> Self {
-        Self {
-            repr: ErrorKind::Parse(inner),
-        }
-    }
-
-    ///
-    /// Creates a new [`Error`] for an out of target range slice, with the given invalid
-    /// range and target length.
-    ///
-    pub fn slice_oor(
-        given: impl Into<EolinaRange>,
-        translated: impl Into<EolinaRange>,
-        length: usize,
-    ) -> Self {
-        Self {
-            repr: ErrorKind::SliceOutOfRange(given.into(), translated.into(), length),
-        }
-    }
-
-    ///
-    /// Creates a new [`Error`] for a incompatible slice indices, with the given invalid
-    /// range and target length.
-    ///
-    pub fn slice_incompat(
-        given: impl Into<EolinaRange>,
-        translated: impl Into<EolinaRange>,
-        length: usize,
-    ) -> Self {
-        Self {
-            repr: ErrorKind::SliceIncompatible(given.into(), translated.into(), length),
-        }
-    }
-
-    ///
-    /// Creates a new [`Error`] for a arg type mismatch with the given the `expected`
-    /// and `actual` types.
-    ///
-    pub fn arg_mismatch(expected: &'static [Kind], actual: Kind) -> Self {
-        Self {
-            repr: ErrorKind::ArgMismatch(expected, actual),
-        }
-    }
-
-    ///
-    /// Creates a new [`Error`] for a concat type mismatch with the given the `left`
-    /// and `right` types.
-    ///
-    pub fn mismatch(left: Kind, right: Kind) -> Self {
-        Self {
-            repr: ErrorKind::Mismatch(left, right),
-        }
-    }
-
-    ///
-    /// Creates a new [`Error`] for an empty queue.
-    ///
-    pub fn empty() -> Self {
-        Self {
-            repr: ErrorKind::QueueEmpty,
-        }
-    }
-}
-
-impl From<parse::Error> for Error {
-    ///
-    /// Creates an [`Error`] from a [`parse::Error`].
-    ///
-    fn from(inner: parse::Error) -> Self {
-        Self::parse(inner)
-    }
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        self.repr.fmt(f)
-    }
-}
-
-///
-/// Represents the kind of an error during program execution.
-///
 #[non_exhaustive]
-#[derive(Debug)]
+#[derive(thiserror::Error, Debug)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
-enum ErrorKind {
+pub enum Error {
     ///
     /// An error occured during parsing.
     ///
-    Parse(parse::Error),
+    Parse(#[from] parse::Error),
 
     ///
     /// An error when have incompatible indecies (start > end).
@@ -135,7 +43,7 @@ enum ErrorKind {
     QueueEmpty,
 }
 
-impl Display for ErrorKind {
+impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
             Self::Parse(inner) => write!(f, "parse error: {}", inner),

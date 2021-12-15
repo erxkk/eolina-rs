@@ -1,54 +1,23 @@
-use crate::exec;
-
 ///
 /// Represents an error that can occur during cli execution.
 ///
-#[derive(Debug)]
-pub struct Error {
-    repr: Kind,
-}
-
-impl From<exec::Error> for Error {
-    fn from(inner: exec::Error) -> Self {
-        Self {
-            repr: Kind::Exec(inner),
-        }
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(inner: std::io::Error) -> Self {
-        Self {
-            repr: Kind::Io(inner),
-        }
-    }
-}
-
-impl From<clap::Error> for Error {
-    fn from(inner: clap::Error) -> Self {
-        Self {
-            repr: Kind::Clap(inner),
-        }
-    }
-}
-
-///
-/// Represents the kind of an error during cli execution.
-///
-#[derive(Debug)]
-pub enum Kind {
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
     ///
-    /// An error during executor execution.
+    /// An error during eolina exec.
     ///
-    Exec(exec::Error),
+    #[error("execution error: {0}")]
+    Exec(#[from] crate::exec::Error),
 
     ///
     /// An error during IO.
     ///
-    Io(std::io::Error),
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
 
     ///
     /// An error during arg parsing.
     ///
-    Clap(clap::Error),
+    #[error("argument parsing error: {0}")]
+    Clap(#[from] clap::Error),
 }

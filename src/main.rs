@@ -8,11 +8,12 @@ mod io;
 mod parse;
 mod repl;
 
-fn main() {
-    // TODO: migrate errors to anyhow/eyre
-    // TODO: reduce reply to one running program with stepwise execution
-    // TODO: fancy error reporting via miette
+fn main() -> color_eyre::Result<()> {
+    // TODO: reduce repl to one running program with stepwise execution
+    // TODO: fancy parsing error reporting via miette
     // TODO: use raw terminal to allow reply history?
 
-    crate::cli::Eolina::new().run().unwrap();
+    color_eyre::install()?;
+    crate::cli::Eolina::new().run()?;
+    Ok(())
 }

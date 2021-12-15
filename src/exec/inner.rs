@@ -59,14 +59,14 @@ impl Context {
     /// * [`Err(error)`] if there was no value in the queue
     ///   * `error` will contain an error of kind `EmptyQueue`
     ///
-    fn pop_queue(&mut self) -> Result<Value, Error> {
-        self.values.pop_front().ok_or_else(Error::empty)
+    fn pop_queue(&mut self) -> color_eyre::Result<Value> {
+        Ok(self.values.pop_front().ok_or_else(|| Error::QueueEmpty)?)
     }
 
     ///
     /// Advances to the next token.
     ///
-    fn next_token(&mut self, io: &mut Io, token: Token) -> Result<(), Error> {
+    fn next_token(&mut self, io: &mut Io, token: Token) -> color_eyre::Result<()> {
         match token {
             Token::In => {
                 let mut val = io.read_expect(" in", &**self.input);
@@ -187,7 +187,7 @@ impl<'a, 'b> Iter<'a, 'b> {
 
 // TODO: use a generator here at some point
 impl<'a, 'b> Iterator for Iter<'a, 'b> {
-    type Item = Result<(), Error>;
+    type Item = color_eyre::Result<()>;
     ///
     /// Attempts parsing and executing the next instruction.
     ///
@@ -205,7 +205,7 @@ impl<'a, 'b> Iterator for Iter<'a, 'b> {
         } else {
             match self.tokens.next()? {
                 Ok(token) => Some(self.exec.next_token(self.io, token)),
-                Err(inner) => Some(Err(Error::parse(inner))),
+                Err(inner) => Some(Err(inner)),
             }
         }
     }

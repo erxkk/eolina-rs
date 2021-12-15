@@ -1,4 +1,3 @@
-use super::Result as CliResult;
 use crate::{
     exec,
     io::{self, Io},
@@ -72,7 +71,7 @@ impl<'a, 'b> Eolina<'a, 'b> {
         }
     }
 
-    pub fn run(mut self) -> CliResult {
+    pub fn run(mut self) -> color_eyre::Result<()> {
         // let clap handle --version/--help etc
         let matches = self.app.get_matches();
 
@@ -98,7 +97,7 @@ impl<'a, 'b> Eolina<'a, 'b> {
     }
 }
 
-fn cmd_exec(io: &mut Io, path: &str) -> CliResult {
+fn cmd_exec(io: &mut Io, path: &str) -> color_eyre::Result<()> {
     // read all file contents into a string
     let input = {
         // we do not bugffer reading as we read the whole contents once
@@ -116,7 +115,7 @@ fn cmd_exec(io: &mut Io, path: &str) -> CliResult {
     let mut context = exec::Context::new(input);
 
     // eagerly collect/execute it
-    context.iter(io).collect::<Result<Vec<_>, exec::Error>>()?;
+    context.iter(io).collect::<Result<Vec<_>, _>>()?;
 
     // reset the context
     context.reset();
@@ -128,12 +127,12 @@ fn cmd_eval<'a>(
     io: &mut Io,
     program: &'a str,
     _inputs: Option<impl Iterator<Item = &'a str>>,
-) -> CliResult {
+) -> color_eyre::Result<()> {
     // create an executor context
     let mut context = exec::Context::new(program.to_owned());
 
     // eagerly collect/execute it
-    context.iter(io).collect::<Result<Vec<_>, exec::Error>>()?;
+    context.iter(io).collect::<Result<Vec<_>, _>>()?;
 
     // reset the context
     context.reset();
@@ -141,14 +140,14 @@ fn cmd_eval<'a>(
 }
 
 // TODO: make reply run a result
-fn cmd_repl(_io: &mut Io) -> CliResult {
+fn cmd_repl(_io: &mut Io) -> color_eyre::Result<()> {
     let mut context = repl::Context::new();
     context.run();
     // Ok(())
 }
 
 // TODO: make args optional
-fn cmd_completions<'a>(_io: &mut Io, shell: &'a str, path: &'a str) -> CliResult {
+fn cmd_completions<'a>(_io: &mut Io, shell: &'a str, path: &'a str) -> color_eyre::Result<()> {
     let shell = match shell {
         "bash" => Shell::Bash,
         "elvish" => Shell::Elvish,

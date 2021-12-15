@@ -76,10 +76,10 @@ impl Context {
     /// * [`Err(string)`] if the executor could not be executed or reset
     ///   * `string` contains the error reason
     ///
-    fn run_exec<'a>(&mut self, exec: &mut ExecContext) -> Result<(), Error<'a>> {
+    fn run_exec<'a>(&mut self, exec: &mut ExecContext) -> color_eyre::Result<()> {
         for res in exec.iter(&mut self.exec_io) {
             if let Some(err) = res.err() {
-                return Err(Error::exec(err));
+                eyre::bail!(err);
             }
         }
 
@@ -98,7 +98,7 @@ impl Context {
     /// * [`Err(string)`] if the command could not be executed
     ///   * `string` contains the error reason
     ///
-    fn command<'a>(&mut self, cmd: &'a str) -> Result<(), Error<'a>> {
+    fn command<'a>(&mut self, cmd: &'a str) -> color_eyre::Result<()> {
         match cmd {
             "exit" | "quit" | "q" => process::exit(0),
             "help" | "h" | "?" => {
@@ -151,21 +151,23 @@ impl Context {
                             .iter()
                             .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
                     {
-                        Err(Error::missing_param("name", 0))
+                        eyre::bail!(Error::MissingCommandParameter("name", 0));
                     } else if let Some(pos) = x.find(' ') {
                         let (name, program) = x.split_at(pos);
                         self.execs
                             .insert(name.to_owned(), ExecContext::new(program[1..].to_owned()));
                         Ok(())
                     } else {
-                        Err(Error::missing_param("program", 1))
+                        eyre::bail!(Error::MissingCommandParameter("program", 1));
                     }
                 }
                 [b'c', b' ', ..] => {
                     let x = &x[2..];
                     let mut iter = x.split_ascii_whitespace();
 
-                    let name = iter.next().ok_or_else(|| Error::missing_param("name", 0))?;
+                    let name = iter
+                        .next()
+                        .ok_or_else(|| Error::MissingCommandParameter("name", 0))?;
 
                     // move out executor to avoid doublemutable borrow
                     match self.execs.remove(name) {
@@ -180,24 +182,26 @@ impl Context {
                             self.execs.insert(name.to_string(), exec);
                             res
                         }
-                        None => Err(Error::unknown_program(x)),
+                        None => eyre::bail!(Error::UnknownProgramm(x.to_owned())),
                     }
                 }
                 [b'r', b' ', ..] => {
                     let x = &x[2..];
                     let mut iter = x.split_ascii_whitespace();
 
-                    let name = iter.next().ok_or_else(|| Error::missing_param("name", 0))?;
+                    let name = iter
+                        .next()
+                        .ok_or_else(|| Error::MissingCommandParameter("name", 0))?;
 
                     match self.execs.remove(name) {
                         Some(exec) => {
                             println!("removed program: `{}`: {}", name, exec.input());
                             Ok(())
                         }
-                        None => Err(Error::unknown_program(x)),
+                        None => eyre::bail!(Error::UnknownProgramm(x.to_owned())),
                     }
                 }
-                _ => Err(Error::unknown_command(x)),
+                _ => eyre::bail!(Error::UnknownCommand(x.to_owned())),
             },
         }
     }

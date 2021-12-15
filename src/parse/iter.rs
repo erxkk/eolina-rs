@@ -1,4 +1,4 @@
-use super::{next_token, Error, Token};
+use super::{next_token, Token};
 
 ///
 /// A token iterator, attempts yielding tokens on every call to [`Iterator::next`].
@@ -34,7 +34,7 @@ impl<'a> Iter<'a> {
 }
 
 impl<'a> Iterator for Iter<'a> {
-    type Item = Result<Token, Error>;
+    type Item = color_eyre::Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.error || self.slice.is_empty() {
@@ -48,7 +48,7 @@ impl<'a> Iterator for Iter<'a> {
                 }
                 Err(err) => {
                     self.error = true;
-                    Some(Err(err))
+                    Some(Err(err.into()))
                 }
             }
         }
