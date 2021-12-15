@@ -191,7 +191,8 @@ impl Display for Token {
 ///   * `error` contains the [`Error`]
 ///
 pub fn next_token(input: &str) -> Result<(&str, Token), Error> {
-    let input = input.trim_start_matches(|ch| ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t');
+    // ignore whitespace, treat whitespace as empty
+    let input = input.trim_start_matches(|ch: char| ch.is_ascii_whitespace());
     if input.is_empty() {
         return Err(Error::empty());
     }

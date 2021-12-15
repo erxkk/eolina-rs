@@ -42,7 +42,7 @@ impl<'a> Iterator for Iter<'a> {
         } else {
             match next_token(self.slice) {
                 Ok((rest, token)) => {
-                    self.slice = rest;
+                    self.slice = rest.trim_matches(|ch: char| ch.is_ascii_whitespace());
                     self.error = false;
                     Some(Ok(token))
                 }
