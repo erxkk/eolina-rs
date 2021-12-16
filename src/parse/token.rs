@@ -82,8 +82,8 @@ impl Display for Map {
 ///
 /// A function token.
 ///
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Token {
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Token<'p> {
     ///
     /// The input token `<`.
     ///
@@ -95,9 +95,9 @@ pub enum Token {
     Out,
 
     ///
-    /// The split token `/x/` where `x` is empty or a [`String`].
+    /// The split token `/x/` where `x` is empty or a [`str`].
     ///
-    Split(Option<String>),
+    Split(Option<&'p str>),
 
     ///
     /// The join token `.`.
@@ -155,7 +155,7 @@ pub enum Token {
     Slice(EolinaRange),
 }
 
-impl Display for Token {
+impl<'p> Display for Token<'p> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::In => f.write_str("<"),
@@ -190,13 +190,14 @@ impl Display for Token {
 /// * [`Err(error)`] if unable to parse a token
 ///   * `error` contains the [`Error`]
 ///
-pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token, usize)> {
-    let tirmlen = 0;
+pub fn next_token(input: &str) -> Result<(&str, Token, usize), Error> {
     // ignore whitespace, treat whitespace as empty
-    let input = input.trim_start_matches(|ch: char| ch.is_ascii_whitespace());
-    if input.is_empty() {
-        return Err(Error::Empty.into());
+    let trimmed = input.trim_start_matches(|ch: char| ch.is_ascii_whitespace());
+    if trimmed.is_empty() {
+        return Err(Error::Empty);
     }
+
+    let tirmlen = input.len() - trimmed.len();
 
     let single = (
         tag("<"),
@@ -258,12 +259,12 @@ pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token, usize)> {
     >;
 
     // TODO: if type_ascription is stabilized and supported by rust-analyzer, these can be evaluated one at a time
-    let single_res: Single = alt(single)(input);
-    let double_res: Double = alt(double)(input);
-    let split_res: SingleOpt = split(input);
-    let filter_res: Single = filter(input);
-    let map_res: Single = map(input);
-    let slice_res: NestedDouble = slice(input);
+    let single_res: Single = alt(single)(trimmed);
+    let double_res: Double = alt(double)(trimmed);
+    let split_res: SingleOpt = split(trimmed);
+    let filter_res: Single = filter(trimmed);
+    let map_res: Single = map(trimmed);
+    let slice_res: NestedDouble = slice(trimmed);
 
     if let Ok((rest, parsed)) = single_res {
         Ok((
@@ -291,8 +292,8 @@ pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token, usize)> {
     } else if let Ok((rest, optional)) = split_res {
         Ok((
             rest,
-            Token::Split(optional.map(ToOwned::to_owned)),
-            tirmlen + optional.map(|str| str.len() + 2).unwrap_or(2),
+            Token::Split(optional),
+            tirmlen + optional.map(|str| str.len() + 4).unwrap_or(2),
         ))
     } else if let Ok((rest, parsed)) = map_res {
         Ok((
@@ -337,7 +338,7 @@ pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token, usize)> {
                 + second.map(counter).unwrap_or_default(),
         ))
     } else {
-        Err(Error::Unknown(input.to_owned()).into())
+        Err(Error::Unknown(input.to_owned()))
     }
 }
 
@@ -361,11 +362,11 @@ mod test {
         assert_eq!(next_token("//").unwrap(), ("", Token::Split(None), 2));
         assert_eq!(
             next_token("/\"\"/").unwrap(),
-            ("", Token::Split(Some("".to_owned())), 4)
+            ("", Token::Split(Some("")), 4)
         );
         assert_eq!(
             next_token("/\"aa\"/").unwrap(),
-            ("", Token::Split(Some("aa".to_owned())), 6)
+            ("", Token::Split(Some("aa")), 6)
         );
     }
 

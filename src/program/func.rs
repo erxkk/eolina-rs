@@ -17,8 +17,12 @@ use crate::parse::{CheckToken, MapToken};
 /// * [`Err(error)`]
 ///   * `error` contains an arg type mismatch [`Error`]
 ///
-pub fn split(input: Value, split: Option<String>) -> Result<Value, Error> {
-    let string = input.unwrap_string()?;
+pub fn split(input: Value, split: Option<&str>) -> Result<Value, Error> {
+    let string = match input {
+        Value::String(inner) => Ok(inner),
+        x => Err(Error::ArgMismatch(&[Kind::String], x.kind())),
+    }?;
+
     Ok(Value::StringVec(match split {
         Some(split) => string
             .split(&split)
@@ -44,9 +48,12 @@ pub fn split(input: Value, split: Option<String>) -> Result<Value, Error> {
 ///   * `error` contains an arg type mismatch [`Error`]
 ///
 pub fn join(input: Value) -> Result<Value, Error> {
-    Ok(Value::String(
-        input.unwrap_string_vec()?.into_iter().collect::<String>(),
-    ))
+    let vec = match input {
+        Value::StringVec(inner) => Ok(inner),
+        x => Err(Error::ArgMismatch(&[Kind::StringVec], x.kind())),
+    }?;
+
+    Ok(Value::String(vec.into_iter().collect::<String>()))
 }
 
 ///
@@ -278,7 +285,11 @@ fn __filter<T: AsciiExt>(val: &T, check: CheckToken) -> bool {
 ///   * `error` contains an arg type mismatch [`Error`]
 ///
 pub fn slice(input: Value, range: EolinaRange) -> Result<Value, Error> {
-    let len = input.unwrap_len()?;
+    let len = match &input {
+        Value::String(inner) => Ok(inner.len()),
+        Value::StringVec(inner) => Ok(inner.len()),
+        x => Err(Error::ArgMismatch(&[Kind::String], x.kind())),
+    }?;
 
     // map to absolute
     let idx_map = |idx| match idx {
@@ -353,7 +364,7 @@ mod test {
             Value::StringVec(vec!["A".to_owned(), "b".to_owned(), "c".to_owned()])
         );
         assert_eq!(
-            super::split(Value::String("Abcbdebfb".to_owned()), Some("b".to_owned())).unwrap(),
+            super::split(Value::String("Abcbdebfb".to_owned()), Some("b")).unwrap(),
             Value::StringVec(vec![
                 "A".to_owned(),
                 "c".to_owned(),

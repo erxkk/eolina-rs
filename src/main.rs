@@ -1,18 +1,18 @@
-#![feature(derive_default_enum, path_try_exists, explicit_generic_args_with_impl_trait)]
+#![feature(derive_default_enum, iter_intersperse, generators, generator_trait)]
 #![allow(dead_code)]
 
 mod cli;
-mod exec;
 mod helper;
 mod io;
 mod parse;
+mod program;
 mod repl;
 
 fn main() -> color_eyre::Result<()> {
-    // TODO: fancy parsing error reporting via miette
+    // TODO: program analysis and fancy parsing error reporting via miette
     // TODO: use raw terminal to allow reply history?
 
     color_eyre::install()?;
-    crate::cli::Eolina::new().run()?;
+    cli::Eolina::new().run()?;
     Ok(())
 }

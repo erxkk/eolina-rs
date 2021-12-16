@@ -2,8 +2,10 @@
 //! Contains utility to parse tokens.
 //!
 
-mod iter;
-pub use iter::Iter;
+mod gen;
+pub use gen::EagerGen;
+pub use gen::Gen;
+pub use gen::LazyGen;
 
 mod err;
 pub use err::Error;

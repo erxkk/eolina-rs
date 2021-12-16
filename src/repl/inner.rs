@@ -1,52 +1,47 @@
 use super::Error;
 use crate::{
-    exec::{Context as ExecContext, Value},
+    helper,
     io::Io,
     io::Kind,
-    io::Mode,
+    parse::LazyGen,
+    program::{Context as ProgramContext, Value},
 };
-use std::{collections::VecDeque, process};
+use std::{collections::VecDeque, ops::Generator, pin::Pin, process};
 
 ///
 /// A repl context, used for storing and executing programs.
 ///
-pub struct Context {
-    io: Io,
-    exec_io: Io,
+pub struct Context<'a> {
+    io: &'a mut Io,
+    exec_io: &'a mut Io,
     values: VecDeque<Value>,
 }
 
-impl Context {
+impl<'a> Context<'a> {
     ///
-    /// Creates a new [`Context`], with [`Mode::Colorful`].
+    /// Creates a new [`Context`] with the given [`Io`] instances.
     ///
-    pub fn new() -> Self {
+    pub fn new(io: &'a mut Io, exec_io: &'a mut Io) -> Self {
         Self {
-            io: Io::with(
-                Mode::Lean,
-                (None, None),
-                (None, None),
-                ("[".to_owned(), "]: ".to_owned()),
-            ),
-            exec_io: Io::with(
-                Mode::Lean,
-                ("[".to_owned(), "]: ".to_owned()),
-                ("[".to_owned(), "]: ".to_owned()),
-                ("[".to_owned(), "]: ".to_owned()),
-            ),
+            io,
+            exec_io,
             values: VecDeque::new(),
         }
     }
 
     ///
-    /// Continously runs this repl context until the program is prompted to exit.
+    /// Continously runs this [`Context`] until the program is prompted to exit.
+    ///
+    /// **Note**: Program or command errors are **not** propagated.
     ///
     /// ### Returns
     ///
-    /// * [`Ok(())`] if the repl was run successful
-    /// * [`Err(_)`] if the repl failed
+    /// * [`Ok`]
+    ///   * the [`Context`] was successful run and exited normaly
+    /// * [`Err`]
+    ///   * the [`Context`] was not successful run
     ///
-    pub fn run(&mut self) -> color_eyre::Result<()> {
+    pub fn run(&mut self) -> Result<(), Error> {
         'outer: loop {
             let mut input = self.io.read_expect(">>> ");
 
@@ -70,31 +65,46 @@ impl Context {
                 continue 'outer;
             }
 
-            for res in ExecContext::new(&input, &mut self.exec_io, &mut self.values) {
-                if let Some(err) = res.err() {
-                    self.io.write_expect(Kind::Error, None, err);
-                    continue 'outer;
+            let mut program = ProgramContext::new(
+                &input,
+                LazyGen::new(&input),
+                self.exec_io,
+                &mut self.values,
+            );
+
+            'inner: loop {
+                match Pin::new(&mut program).resume(()) {
+                    std::ops::GeneratorState::Yielded(_) => continue 'inner,
+                    std::ops::GeneratorState::Complete(res) => {
+                        match res {
+                            Ok(_) => {}
+                            Err(err) => self.io.write_expect(Kind::Error, None, err),
+                        }
+                        break 'inner;
+                    }
                 }
             }
         }
     }
 
     ///
-    /// Executes a command for this context.
+    /// Executes a command for this [`Context`].
     ///
     /// ### Returns
     ///
-    /// * [`Ok(())`] if the command was executed successfully
-    /// * [`Err(string)`] if the command could not be executed
-    ///   * `string` contains the error reason
+    /// * [`Ok`]
+    ///   * the command was executed successfully
+    /// * [`Err`]
+    ///   * the command was not executed successfully contains the
+    ///     error reason
     ///
-    fn command(&mut self, cmd: &str) -> color_eyre::Result<()> {
+    fn command(&mut self, cmd: &str) -> Result<(), Error> {
         match cmd {
-            "exit" | "quit" | "q" => process::exit(0),
+            "exit" | "e" => process::exit(0),
             "help" | "h" | "?" => {
                 // TODO: see multiline handling in crate::io
                 self.io
-                    .write_expect(Kind::Output, None, "exit | quit | q    exits the program");
+                    .write_expect(Kind::Output, None, "exit | e           exits the program");
                 self.io
                     .write_expect(Kind::Output, None, "help | h | ?       prints all commands");
                 self.io.write_expect(
@@ -115,6 +125,11 @@ impl Context {
 
                 Ok(())
             }
+            "queue" | "q" => {
+                self.io
+                    .write_expect(Kind::Info, "queue", helper::fmt_iter(self.values.iter()));
+                Ok(())
+            }
             "example" | "eg" => {
                 self.io
                     .write_expect(Kind::Output, None, "<>            echo program");
@@ -127,7 +142,7 @@ impl Context {
                 );
                 Ok(())
             }
-            _ => eyre::bail!(Error::UnknownCommand(cmd.to_owned())),
+            _ => Err(Error::UnknownCommand(cmd.to_owned())),
         }
     }
 }

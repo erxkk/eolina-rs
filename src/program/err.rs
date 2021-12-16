@@ -1,29 +1,24 @@
 use super::Kind;
-use crate::{
-    helper::{EolinaRange, EolinaRangeBound},
-    parse,
-};
+use crate::helper::{EolinaRange, EolinaRangeBound};
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
 ///
-/// Represents an error that can occur during program execution.
+/// An error that can occur during program execution.
 ///
-#[non_exhaustive]
 #[derive(thiserror::Error, Debug)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum Error {
     ///
     /// An error occured during parsing.
     ///
-    Parse(#[from] parse::Error),
+    Parse(#[from] crate::parse::Error),
 
     ///
-    /// An error when have incompatible indecies (start > end).
+    /// A slice had incompatible indecies (start > end).
     ///
     SliceIncompatible(EolinaRange, EolinaRange, usize),
 
     ///
-    /// An error when the the slice range is out of target range bound.
+    /// The slice range bounds are out of the target range bounds.
     ///
     SliceOutOfRange(EolinaRange, EolinaRange, usize),
 
@@ -46,7 +41,7 @@ pub enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
-            Self::Parse(inner) => write!(f, "parse error: {}", inner),
+            Self::Parse(_) => write!(f, "parse error"),
             Self::SliceIncompatible(given, translated, length) => {
                 write!(
                     f,

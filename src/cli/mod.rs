@@ -1,5 +1,5 @@
 mod err;
 pub use err::Error;
 
-mod inner;
-pub use inner::Eolina;
+mod eolina;
+pub use eolina::Eolina;

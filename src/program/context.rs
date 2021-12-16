@@ -1,63 +1,73 @@
 use super::{func, Error, Value};
 use crate::{
     io::{Io, Kind},
-    parse::{Iter as TokenIter, Token},
+    parse::{Gen, Token},
 };
 use crossterm::style::Stylize;
-use std::collections::VecDeque;
+use std::{
+    collections::VecDeque,
+    ops::{Generator, GeneratorState},
+    pin::Pin,
+};
 
 ///
 /// The excution context for a program.
 ///
 #[derive(Debug)]
-pub struct Context<'p, 'io, 'v> {
+pub struct Context<'p, 'io, 'v, G> {
     prev_len: usize,
     input: &'p str,
     io: &'io mut Io,
-    tokens: TokenIter<'p>,
+    gen: G,
     values: &'v mut VecDeque<Value>,
 }
 
-impl<'p, 'io, 'v> Context<'p, 'io, 'v> {
+impl<'p, 'io, 'v, G> Context<'p, 'io, 'v, G>
+where
+    G: Gen<'p> + Unpin,
+{
     ///
-    /// Creates a new [`Context`] with the given `tokens` and an empty queue.
+    /// Creates a new [`Context`] with the given token generator and an empty queue.
     ///
-    pub fn new(input: &'p str, io: &'io mut Io, values: &'v mut VecDeque<Value>) -> Self {
+    pub fn new(input: &'p str, gen: G, io: &'io mut Io, values: &'v mut VecDeque<Value>) -> Self {
         Self {
             prev_len: 0,
             input,
             io,
-            tokens: TokenIter::new(input),
+            gen,
             values,
         }
     }
 
     ///
-    /// Pops the front of the queue or returns a empty queue error.
+    /// Pops the front of the queue or returns an [`Error::QueueEmpty`] error.
     ///
     /// ### Returns
     ///
-    /// * [`Ok(value)`] if there was a value to pop
-    ///   * `value` will contain the value fromt he head of the queue
-    /// * [`Err(error)`] if there was no value in the queue
-    ///   * `error` will contain an error of kind `EmptyQueue`
+    /// * [`Ok`]
+    ///   * the queue was not empty, contains the [`Value`]
+    /// * [`Err`]
+    ///   * the queue was empty, contains the [`Error`]
     ///
-    fn pop_queue(&mut self) -> color_eyre::Result<Value> {
-        Ok(self.values.pop_front().ok_or(Error::QueueEmpty)?)
+    fn pop_queue(&mut self) -> Result<Value, Error> {
+        self.values.pop_front().ok_or(Error::QueueEmpty)
     }
 
     ///
     /// Returns a colored [`String`] indicating where the programm is curently in execution.
+    /// The [`Io`] instance will ignore this when it's `mode` is not set to
+    /// [`Mode::Colorful`](crate::io::Mode::Colorful).
     ///
     /// ### Returns
     ///
-    /// Returns the stylized [`String`].
+    /// Returns the stylized [`String`], with the current [`Token`] highlighted.
     ///
     /// ### Panics
-    /// Panics if the program was not yet started or is empty.
+    ///
+    /// Panics if the program is empty, which are however usually not parsed.
     ///
     fn get_context(&self) -> String {
-        let (s, r) = self.input.split_at(self.prev_len - 1);
+        let (s, r) = self.input.split_at(self.prev_len);
         let c = &r[0..1];
         let r = &r[1..];
 
@@ -65,9 +75,17 @@ impl<'p, 'io, 'v> Context<'p, 'io, 'v> {
     }
 
     ///
-    /// Advances to the next token.
+    /// Executes the function associated with the given [`Token`].
     ///
-    fn next_token(&mut self, token: Token) -> color_eyre::Result<()> {
+    /// ### Returns
+    ///
+    /// * [`Ok`]
+    ///   * the function was successfully executed
+    /// * [`Err`]
+    ///   * the function was not successfully executed
+    ///   * an IO operation failed
+    ///
+    fn next_token(&mut self, token: Token) -> Result<(), Error> {
         match token {
             Token::In => {
                 let mut val = self.io.read_expect(self.get_context().as_str());
@@ -147,32 +165,53 @@ impl<'p, 'io, 'v> Context<'p, 'io, 'v> {
         }
         Ok(())
     }
+
+    ///
+    ///
+    ///
+    pub fn run(mut self) -> Result<(), Error> {
+        loop {
+            match Pin::new(&mut self).resume(()) {
+                GeneratorState::Yielded(_) => continue,
+                GeneratorState::Complete(res) => break res,
+            }
+        }
+    }
 }
 
-// TODO: use a generator here at some point
-impl<'p, 'io, 'v> Iterator for Context<'p, 'io, 'v> {
-    type Item = color_eyre::Result<()>;
+impl<'p, 'io, 'v, G> Generator for Context<'p, 'io, 'v, G>
+where
+    G: Gen<'p> + Unpin,
+{
+    type Yield = ();
+    type Return = Result<(), Error>;
+
     ///
-    /// Attempts parsing and executing the next instruction.
+    /// Attempts to parse and execute the next instruction.
     ///
     /// ### Returns
     ///
-    /// * [`Some(Ok(()))`] if the current instruction could be parsed and executed
-    /// * [`Some(Err(error))`] if the next instruction is invalid or could not be parsed or executed
-    ///   * `error` contains the [`Error`] that occured during execution
-    /// * [`None`] if the previous result was an [`Error`] or the all instructions were executed
-    ///   * `self::error` returns whether or not an error was encountered before
+    /// * [`GeneratorState::Yielded`]
+    ///   * the next instruction was successfully parsed and executed
+    /// * [`GeneratorState::Complete(Ok)`]
+    ///   * the generator has completed
+    /// * [`GeneratorState::Complete(Err)`]
+    ///   * the next instruction could not be parsed or executed,
+    ///     contains the [`Error`] that occured
     ///
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.tokens.error() {
-            None
-        } else {
-            match self.tokens.next()? {
-                Ok((token, pos)) => {
-                    self.prev_len += pos;
-                    Some(self.next_token(token))
+    fn resume(self: Pin<&mut Self>, _arg: ()) -> GeneratorState<Self::Yield, Self::Return> {
+        let this = Pin::into_inner(self);
+
+        match Pin::new(&mut this.gen).resume(()) {
+            GeneratorState::Yielded((token, pos)) => match this.next_token(token) {
+                Ok(()) => {
+                    this.prev_len += pos;
+                    GeneratorState::Yielded(())
                 }
-                Err(inner) => Some(Err(inner)),
+                Err(inner) => GeneratorState::Complete(Err(inner)),
+            },
+            GeneratorState::Complete(inner) => {
+                GeneratorState::Complete(inner.map_err(|err| err.into()))
             }
         }
     }

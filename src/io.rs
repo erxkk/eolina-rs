@@ -7,7 +7,8 @@ use std::{
 // TODO: multiline indentation
 
 ///
-/// An IO-Abstraction that allows for simple prompted or colorful output if avaiable.
+/// An IO-Abstraction that allows for simple prompted and colorful
+/// output if set and ignoring prompts and colors if not set.
 ///
 #[derive(Debug)]
 pub struct Io {
@@ -20,14 +21,12 @@ pub struct Io {
     pub in_post_prompt: Option<String>,
     pub log_pre_prompt: Option<String>,
     pub log_post_prompt: Option<String>,
-    pub in_mode: Mode,
-    pub out_mode: Mode,
-    pub log_mode: Mode,
+    pub mode: Mode,
 }
 
 impl Io {
     ///
-    /// Creates a new [`Io`].
+    /// Creates a new [`Io`] with not pre- or post-delimiters.
     ///
     pub fn new(mode: Mode) -> Self {
         Self {
@@ -40,14 +39,12 @@ impl Io {
             out_post_prompt: None,
             log_pre_prompt: None,
             log_post_prompt: None,
-            in_mode: mode,
-            out_mode: mode,
-            log_mode: mode,
+            mode,
         }
     }
 
     ///
-    /// Creates a new [`Io`] with the given prompt delimiterss.
+    /// Creates a new [`Io`] with the given pre- and post-prompts.
     ///
     pub fn with(
         mode: Mode,
@@ -69,9 +66,7 @@ impl Io {
             out_post_prompt,
             log_pre_prompt,
             log_post_prompt,
-            in_mode: mode,
-            out_mode: mode,
-            log_mode: mode,
+            mode,
         }
     }
 
@@ -80,37 +75,35 @@ impl Io {
     ///
     /// ### Panics
     ///
-    /// Panics if writing to [`Stdout`] was unsuccessful.
+    /// Panics if writing to [`Stdout`]/[`Stderr`] was unsuccessful.
     /// Panics if reading from [`Stdin`] was unsuccessful.
     ///
-    pub fn read_expect<'a, 'b>(&mut self, prompt: impl Into<Option<&'a str>>) -> String {
+    pub fn read_expect<'a>(&mut self, prompt: impl Into<Option<&'a str>>) -> String {
         self.read(prompt).expect("io failure")
     }
 
     ///
-    /// Reads a line from [`Stdin`] after prompting for input with an optional
-    /// `promot` and `context`. Prompts and colors are controlled by
-    /// the values given on the [`Io`].
+    /// Reads a line from [`Stdout`] after sending the given `prompt` to [`Stdout`]. If
+    /// a `prompt` is supplied, pre- and post-prompts are applied if set.
     ///
     /// ### Returns
     ///
-    /// * [`Ok(())`] if writing and reading was successful
-    /// * [`Err(error)`] if writing and reading failed
-    ///   * `error` contains the [`io::Error`]
+    /// * [`Ok`]
+    ///   * [`Stdout`]/[`Stderr`] was writen to successful
+    ///   * [`Stdin`] was read from successful
+    /// * [`Err`]
+    ///   * [`Stdout`]/[`Stderr`] was writen to unsuccessful, contains the [`io::Error`]
+    ///   * [`Stdin`] was read from unsuccessful
     ///
-    pub fn read<'a, 'b>(&mut self, prompt: impl Into<Option<&'a str>>) -> io::Result<String> {
+    pub fn read<'a>(&mut self, prompt: impl Into<Option<&'a str>>) -> io::Result<String> {
         // use `in_mode` as the prompts are for the reading input
-        if self.in_mode >= Mode::Prompt {
+        if self.mode >= Mode::Colorful {
             if let Some(prompt) = prompt.into() {
                 if let Some(pre_prompt) = &self.in_pre_prompt {
                     write!(self.stdout, "{}", pre_prompt)?;
                 }
 
-                if matches!(self.in_mode, Mode::Colorful) {
-                    write!(self.stdout, "{}", prompt.white())?;
-                } else {
-                    write!(self.stdout, "{}", prompt)?;
-                }
+                write!(self.stdout, "{}", prompt.white())?;
 
                 if let Some(post_prompt) = &self.in_post_prompt {
                     write!(self.stdout, "{}", post_prompt)?;
@@ -131,9 +124,9 @@ impl Io {
     ///
     /// ### Panics
     ///
-    /// Panics if writing to [`Stdout`] was unsuccessful.
+    /// Panics if writing to [`Stdout`]/[`Stderr`] was unsuccessful.
     ///
-    pub fn write_expect<'a, 'b>(
+    pub fn write_expect<'a>(
         &mut self,
         kind: Kind,
         prompt: impl Into<Option<&'a str>>,
@@ -143,89 +136,75 @@ impl Io {
     }
 
     ///
-    /// Writes the given msg to [`Stdout`] with an optional `context`.
-    /// Prompts and colors are controlled by the values given on the [`Io`].
+    /// Writes the given msg to [`Stdout`] with an optional `prompt`. If
+    /// a `prompt` is supplied, pre- and post-prompts are applied if set.
     ///
     /// ### Returns
     ///
-    /// * [`Ok(())`] if writing was successful
-    /// * [`Err(error)`] if writing failed
-    ///   * `error` contains the [`io::Error`]
+    /// * [`Ok`]
+    ///   * [`Stdout`]/[`Stderr`] was writen to successful
+    /// * [`Err`]
+    ///   * [`Stdout`]/[`Stderr`] was writen to unsuccessful, contains the [`io::Error`]
     ///
-    pub fn write<'a, 'b>(
+    pub fn write<'a>(
         &mut self,
         kind: Kind,
         prompt: impl Into<Option<&'a str>>,
         msg: impl Display,
     ) -> io::Result<()> {
-        match kind {
-            Kind::Output if self.out_mode == Mode::Muted => return Ok(()),
-            Kind::Info | Kind::Warning | Kind::Error if self.log_mode == Mode::Muted => {
-                return Ok(())
-            }
-            _ => {}
+        // ignore muted, or log messages on lean
+        if self.mode == Mode::Muted || (self.mode == Mode::Lean && kind > Kind::Output) {
+            return Ok(());
         }
 
-        let (buffer, mode, prompt): (&mut dyn Write, _, _) = match kind {
+        let (buffer, prompt, pre, post): (&mut dyn Write, _, _, _) = match kind {
             Kind::Output => (
                 &mut self.stdout,
-                self.out_mode,
                 prompt
                     .into()
                     .map(|prompt| prompt.stylize())
-                    .or_else(|| match self.out_mode {
-                        Mode::Prompt => Some("out".white()),
-                        Mode::Colorful => Some("out".white()),
-                        _ => unreachable!("invalid mode propagated"),
-                    }),
+                    .or_else(|| Some("out".white())),
+                &self.out_pre_prompt,
+                &self.out_post_prompt,
             ),
             Kind::Info => (
-                &mut self.stdout,
-                self.log_mode,
+                &mut self.stderr,
                 prompt
                     .into()
                     .map(|prompt| prompt.stylize())
-                    .or_else(|| match self.log_mode {
-                        Mode::Prompt => Some("info".white()),
-                        Mode::Colorful => Some("info".green()),
-                        _ => unreachable!("invalid mode propagated"),
-                    }),
+                    .or_else(|| Some("info".green())),
+                &self.log_pre_prompt,
+                &self.log_post_prompt,
             ),
             Kind::Warning => (
                 &mut self.stderr,
-                self.log_mode,
                 prompt
                     .into()
                     .map(|prompt| prompt.stylize())
-                    .or_else(|| match self.log_mode {
-                        Mode::Prompt => Some("warn".white()),
-                        Mode::Colorful => Some("warn".yellow()),
-                        _ => unreachable!("invalid mode propagated"),
-                    }),
+                    .or_else(|| Some("warn".yellow())),
+                &self.log_pre_prompt,
+                &self.log_post_prompt,
             ),
             Kind::Error => (
                 &mut self.stderr,
-                self.log_mode,
                 prompt
                     .into()
                     .map(|prompt| prompt.stylize())
-                    .or_else(|| match self.log_mode {
-                        Mode::Prompt => Some("error".white()),
-                        Mode::Colorful => Some("error".red()),
-                        _ => unreachable!("invalid mode propagated"),
-                    }),
+                    .or_else(|| Some("error".red())),
+                &self.log_pre_prompt,
+                &self.log_post_prompt,
             ),
         };
 
-        if mode > Mode::Lean {
+        if self.mode >= Mode::Colorful {
             if let Some(prompt) = prompt {
-                if let Some(pre_prompt) = &self.out_pre_prompt {
+                if let Some(pre_prompt) = pre {
                     write!(buffer, "{}", pre_prompt)?;
                 }
 
                 write!(buffer, "{}", prompt)?;
 
-                if let Some(post_prompt) = &self.out_post_prompt {
+                if let Some(post_prompt) = post {
                     write!(buffer, "{}", post_prompt)?;
                 }
             }
@@ -239,60 +218,53 @@ impl Io {
 }
 
 ///
-/// The mode at which IO is used, used to turn off prompts and colors for piped input/output.
+/// The mode at which IO is used, used to turn off prompts and colors for non-tty input/output.
 ///
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum Mode {
     ///
-    /// Ignores input/output.
+    /// Hides input prompts and all output and logging.
     ///
     Muted = 0,
 
     ///
-    /// Lean input/output, no colors or prompts are used, and no info is given
-    /// out, useful for piped input/output.
+    /// Lean input/output, no prompts or colors are used and no log messages are issued,
+    /// useful for piped input/output.
     ///
     #[default]
     Lean = 1,
 
     ///
-    /// Prompts are used for a interactive input/output.
+    /// Colorful prompts and logs are used for a interactive input/output.
     ///
-    Prompt = 2,
-
-    ///
-    /// Colorful prompts and errors are used for a interactive input/output.
-    ///
-    Colorful = 3,
+    Colorful = 2,
 }
 
 ///
-/// The kind of output to print, determines prompt's and colors if enabled.
+/// The kind of output to print, determines prompts and colors if enabled.
 ///
-#[derive(Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum Kind {
     ///
-    /// Output is printed as programm output to [`Stdout`]
+    /// Output is printed as with the output prompts and styling to [`Stdout`].
     ///
+    #[default]
     Output = 0,
 
     ///
-    /// Output is printed as information to [`Stdout`] or ignored
-    /// if the [`Io`] `stdout_mode` is set to [`Mode::Lean`] or below.
+    /// Output is printed as info with the log prompts and styling to [`Stderr`].
     ///
     Info = 1,
 
     ///
-    /// Output is printed as warning to [`Stderr`] or ignored
-    /// if the [`Io`] `stderr_mode` is set to [`Mode::Lean`] or below.
+    /// Output is printed as warning with the log prompts and styling to [`Stderr`].
     ///
     Warning = 2,
 
     ///
-    /// Output is printed as error to [`Stderr`] or ignored
-    /// if the [`Io`] `stderr_mode` is set to [`Mode::Lean`] or below.
+    /// Output is printed as error with the log prompts and styling to [`Stderr`].
     ///
     Error = 3,
 }

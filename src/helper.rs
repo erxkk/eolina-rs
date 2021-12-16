@@ -1,7 +1,23 @@
 use std::{
-    fmt::{self, Display, Formatter, Write},
+    borrow::Cow,
+    fmt::{self, Debug, Display, Formatter, Write},
+    iter,
     ops::{Range, RangeFrom, RangeFull, RangeTo},
 };
+
+///
+/// Formats an [`Iterator`] with the underlying [`Iterator::Item`]'s
+/// [`Display`] representation.
+///
+pub fn fmt_iter<T: Display>(iter: impl Iterator<Item = T>) -> String {
+    iter::once(Cow::Borrowed("["))
+        .chain(
+            iter.map(|entry| Cow::Owned(entry.to_string()))
+                .intersperse(Cow::Borrowed(", ")),
+        )
+        .chain(iter::once(Cow::Borrowed("]")))
+        .collect()
+}
 
 ///
 /// An extension trait for checking checking ascii chars for specific
@@ -252,10 +268,10 @@ impl From<EolinaRangeBound> for isize {
 impl Display for EolinaRangeBound {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            EolinaRangeBound::Start(idx) => idx.fmt(f)?,
+            EolinaRangeBound::Start(idx) => Display::fmt(idx, f)?,
             EolinaRangeBound::End(idx) => {
                 f.write_char('-')?;
-                idx.fmt(f)?;
+                Display::fmt(idx, f)?;
             }
         }
 
@@ -345,11 +361,11 @@ impl Display for EolinaRange {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_char('|')?;
         if let Some(ref bound) = self.start {
-            bound.fmt(f)?;
+            Display::fmt(bound, f)?;
         }
         f.write_char('.')?;
         if let Some(ref bound) = self.end {
-            bound.fmt(f)?;
+            Display::fmt(bound, f)?;
         }
         f.write_char('|')?;
         Ok(())

@@ -1,19 +1,17 @@
 ///
-/// Represents an error during parsing.
+/// An error that can occur during parsing.
 ///
-#[non_exhaustive]
 #[derive(thiserror::Error, Debug)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum Error {
     ///
-    /// The given program was empty.
+    /// A given program was empty.
     ///
     #[error("empty program")]
     Empty,
 
     ///
-    /// Not known token was found at the start of the program.
+    /// Unknown token was encountered.
     ///
-    #[error("unknown token `{0}`")]
+    #[error("unknown token at `{0}`")]
     Unknown(String),
 }
