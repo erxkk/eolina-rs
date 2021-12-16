@@ -194,7 +194,6 @@ fn cmd_eval<'a>(
         mode,
         ("[".to_owned(), "]: ".to_owned()),
         ("[".to_owned(), "]: ".to_owned()),
-        ("[".to_owned(), "]: ".to_owned()),
     );
 
     // create an executor context
@@ -226,16 +225,10 @@ fn cmd_repl(mode: io::Mode) -> Result<(), Error> {
         return Err(Error::User("cannot start repl in a non-tty env".to_owned()));
     }
 
-    let mut io = Io::with(
-        mode,
-        (None, None),
-        (None, None),
-        ("[".to_owned(), "]: ".to_owned()),
-    );
+    let mut io = Io::with(mode, (None, None), ("[".to_owned(), "]: ".to_owned()));
 
     let mut exec_io = Io::with(
         mode,
-        ("[".to_owned(), "]: ".to_owned()),
         ("[".to_owned(), "]: ".to_owned()),
         ("[".to_owned(), "]: ".to_owned()),
     );

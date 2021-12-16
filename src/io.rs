@@ -15,10 +15,8 @@ pub struct Io {
     stdin: Stdin,
     stdout: Stdout,
     stderr: Stderr,
-    pub out_pre_prompt: Option<String>,
-    pub out_post_prompt: Option<String>,
-    pub in_pre_prompt: Option<String>,
-    pub in_post_prompt: Option<String>,
+    pub io_pre_prompt: Option<String>,
+    pub io_post_prompt: Option<String>,
     pub log_pre_prompt: Option<String>,
     pub log_post_prompt: Option<String>,
     pub mode: Mode,
@@ -33,10 +31,8 @@ impl Io {
             stdin: io::stdin(),
             stdout: io::stdout(),
             stderr: io::stderr(),
-            in_pre_prompt: None,
-            in_post_prompt: None,
-            out_pre_prompt: None,
-            out_post_prompt: None,
+            io_pre_prompt: None,
+            io_post_prompt: None,
             log_pre_prompt: None,
             log_post_prompt: None,
             mode,
@@ -48,22 +44,18 @@ impl Io {
     ///
     pub fn with(
         mode: Mode,
-        in_prompts: (impl Into<Option<String>>, impl Into<Option<String>>),
-        out_prompts: (impl Into<Option<String>>, impl Into<Option<String>>),
+        io_prompts: (impl Into<Option<String>>, impl Into<Option<String>>),
         log_prompts: (impl Into<Option<String>>, impl Into<Option<String>>),
     ) -> Self {
-        let (in_pre_prompt, in_post_prompt) = (in_prompts.0.into(), in_prompts.1.into());
-        let (out_pre_prompt, out_post_prompt) = (out_prompts.0.into(), out_prompts.1.into());
+        let (io_pre_prompt, io_post_prompt) = (io_prompts.0.into(), io_prompts.1.into());
         let (log_pre_prompt, log_post_prompt) = (log_prompts.0.into(), log_prompts.1.into());
 
         Self {
             stdin: io::stdin(),
             stdout: io::stdout(),
             stderr: io::stderr(),
-            in_pre_prompt,
-            in_post_prompt,
-            out_pre_prompt,
-            out_post_prompt,
+            io_pre_prompt,
+            io_post_prompt,
             log_pre_prompt,
             log_post_prompt,
             mode,
@@ -99,13 +91,13 @@ impl Io {
         // use `in_mode` as the prompts are for the reading input
         if self.mode >= Mode::Colorful {
             if let Some(prompt) = prompt.into() {
-                if let Some(pre_prompt) = &self.in_pre_prompt {
+                if let Some(pre_prompt) = &self.io_pre_prompt {
                     write!(self.stdout, "{}", pre_prompt)?;
                 }
 
                 write!(self.stdout, "{}", prompt.white())?;
 
-                if let Some(post_prompt) = &self.in_post_prompt {
+                if let Some(post_prompt) = &self.io_post_prompt {
                     write!(self.stdout, "{}", post_prompt)?;
                 }
 
@@ -164,8 +156,8 @@ impl Io {
                     .into()
                     .map(|prompt| prompt.stylize())
                     .or_else(|| Some("out".white())),
-                &self.out_pre_prompt,
-                &self.out_post_prompt,
+                &self.io_pre_prompt,
+                &self.io_post_prompt,
             ),
             Kind::Info => (
                 &mut self.stderr,
