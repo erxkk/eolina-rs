@@ -6,10 +6,10 @@ use crate::{
     parse::LazyGen,
     program::{Context as ProgramContext, Value},
 };
-use std::{collections::VecDeque, ops::Generator, pin::Pin, process};
+use std::{collections::VecDeque, ops::Generator, pin::Pin};
 
 ///
-/// A repl context, used for storing and executing programs.
+/// A repl context, used for interactively executing programs.
 ///
 pub struct Context<'a> {
     io: &'a mut Io,
@@ -57,7 +57,11 @@ impl<'a> Context<'a> {
 
             if let Some(input) = input.strip_prefix('!') {
                 match self.command(input) {
-                    Ok(_) => {}
+                    Ok(shutdown) => {
+                        if shutdown {
+                            break 'outer Ok(());
+                        }
+                    }
                     Err(err) => {
                         self.io.write_expect(Kind::Error, None, err);
                     }
@@ -65,12 +69,8 @@ impl<'a> Context<'a> {
                 continue 'outer;
             }
 
-            let mut program = ProgramContext::new(
-                &input,
-                LazyGen::new(&input),
-                self.exec_io,
-                &mut self.values,
-            );
+            let mut program =
+                ProgramContext::new(&input, LazyGen::new(&input), self.exec_io, &mut self.values);
 
             'inner: loop {
                 match Pin::new(&mut program).resume(()) {
@@ -93,55 +93,47 @@ impl<'a> Context<'a> {
     /// ### Returns
     ///
     /// * [`Ok`]
-    ///   * the command was executed successfully
+    ///   * the command was executed successfully, contains whether
+    ///     or not the reply was prompted to shutdown
     /// * [`Err`]
     ///   * the command was not executed successfully contains the
     ///     error reason
     ///
-    fn command(&mut self, cmd: &str) -> Result<(), Error> {
+    fn command(&mut self, cmd: &str) -> Result<bool, Error> {
         match cmd {
-            "exit" | "e" => process::exit(0),
-            "help" | "h" | "?" => {
-                // TODO: see multiline handling in crate::io
-                self.io
-                    .write_expect(Kind::Output, None, "exit | e           exits the program");
-                self.io
-                    .write_expect(Kind::Output, None, "help | h | ?       prints all commands");
-                self.io.write_expect(
-                    Kind::Output,
-                    None,
-                    "s                  saves a program `!s sort <*[^][_]~>`",
-                );
-                self.io.write_expect(
-                    Kind::Output,
-                    None,
-                    "c                  calls a program `!s sort`",
-                );
-                self.io.write_expect(
-                    Kind::Output,
-                    None,
-                    "r                  removes a program `!r sort`",
-                );
+            "help" | "h" => {
+                let commands = [
+                    "h | help     print all commands",
+                    "q | queue    display the current queue",
+                    "example      display examples",
+                    "exit         exit the program",
+                ];
 
-                Ok(())
+                for cmd in commands {
+                    self.io.write_expect(Kind::Output, None, cmd);
+                }
+
+                Ok(false)
             }
             "queue" | "q" => {
                 self.io
                     .write_expect(Kind::Info, "queue", helper::fmt_iter(self.values.iter()));
-                Ok(())
+                Ok(false)
             }
             "example" | "eg" => {
-                self.io
-                    .write_expect(Kind::Output, None, "<>            echo program");
-                self.io
-                    .write_expect(Kind::Output, None, "<*>>          duplicate echo");
-                self.io.write_expect(
-                    Kind::Output,
-                    None,
+                let examples = [
+                    "<>            echo program",
+                    "<*>>          duplicate echo",
                     "<*[^][_]~>    orders by case, upper first",
-                );
-                Ok(())
+                ];
+
+                for eg in examples {
+                    self.io.write_expect(Kind::Output, None, eg);
+                }
+
+                Ok(false)
             }
+            "exit" => Ok(true),
             _ => Err(Error::UnknownCommand(cmd.to_owned())),
         }
     }

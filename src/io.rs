@@ -4,8 +4,6 @@ use std::{
     io::{self, Stderr, Stdin, Stdout, Write},
 };
 
-// TODO: multiline indentation
-
 ///
 /// An IO-Abstraction that allows for simple prompted and colorful
 /// output if set and ignoring prompts and colors if not set.
