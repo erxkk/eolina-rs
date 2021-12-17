@@ -22,25 +22,9 @@ pub struct Io {
 
 impl Io {
     ///
-    /// Creates a new [`Io`] with not pre- or post-delimiters.
-    ///
-    pub fn new(mode: Mode) -> Self {
-        Self {
-            stdin: io::stdin(),
-            stdout: io::stdout(),
-            stderr: io::stderr(),
-            io_pre_prompt: None,
-            io_post_prompt: None,
-            log_pre_prompt: None,
-            log_post_prompt: None,
-            mode,
-        }
-    }
-
-    ///
     /// Creates a new [`Io`] with the given pre- and post-prompts.
     ///
-    pub fn with(
+    pub fn new(
         mode: Mode,
         io_prompts: (impl Into<Option<String>>, impl Into<Option<String>>),
         log_prompts: (impl Into<Option<String>>, impl Into<Option<String>>),

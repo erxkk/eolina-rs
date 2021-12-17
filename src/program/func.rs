@@ -390,7 +390,6 @@ mod test {
     }
 
     #[test]
-    #[test]
     fn is_conso() {
         assert_eq!(
             super::is_conso(Value::String("bcd".to_owned())).unwrap(),

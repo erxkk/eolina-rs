@@ -61,65 +61,6 @@ pub trait AsciiExt {
     fn is_conso(&self) -> bool;
 }
 
-impl AsciiExt for u8 {
-    fn into_upper(self) -> Self {
-        if self.is_lower() {
-            self
-        } else {
-            self - (b'a' - b'A')
-        }
-    }
-
-    fn into_lower(self) -> Self {
-        if self.is_upper() {
-            self + (b'a' - b'A')
-        } else {
-            self
-        }
-    }
-
-    fn into_swap(self) -> Self {
-        if self.is_upper() {
-            self.into_lower()
-        } else if self.is_lower() {
-            self.into_upper()
-        } else {
-            self
-        }
-    }
-
-    fn is_lower(&self) -> bool {
-        matches!(*self, b'a'..=b'z')
-    }
-
-    fn is_upper(&self) -> bool {
-        matches!(*self, b'A'..=b'Z')
-    }
-
-    fn is_vowel(&self) -> bool {
-        matches!(
-            *self,
-            b'a' | b'e' | b'i' | b'o' | b'u' | b'A' | b'E' | b'I' | b'O' | b'U'
-        )
-    }
-
-    fn is_conso(&self) -> bool {
-        matches!(
-            *self,
-            b'b'..=b'd'
-            | b'f'..=b'h'
-            | b'j'..=b'n'
-            | b'p'..=b't'
-            | b'v'..=b'z'
-            | b'B'..=b'D'
-            | b'F'..=b'H'
-            | b'J'..=b'N'
-            | b'P'..=b'T'
-            | b'V'..=b'Z'
-        )
-    }
-}
-
 impl AsciiExt for char {
     fn into_upper(self) -> Self {
         self.to_ascii_uppercase()
@@ -203,17 +144,17 @@ impl AsciiExt for String {
 
 ///
 /// This is a helper range bound used instead of an [`isize`] to allow for
-/// -0` relative from the back indexing.
+/// `-0` relative from the back indexing.
 ///
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum EolinaRangeBound {
     ///
-    /// An absolute range bound `x` where `x` is a [`usize`]/
+    /// An absolute range bound `x` where `x` is a [`usize`].
     ///
     Start(usize),
 
     ///
-    /// A range bound relative from the back `-x` where `x` is a [`usize`]/
+    /// A range bound relative from the back `-x` where `x` is a [`usize`].
     ///
     End(usize),
 }
@@ -281,8 +222,9 @@ impl Display for EolinaRangeBound {
 
 ///
 /// A convinience range type for error handling and simpler [`Display`] impl.
-/// Is displayed as an eolina range `|s.e|` where `s` is the inclusive relateive start and `e` exclusive relative the end.
-/// Negative values denote relative from the end.
+/// Is displayed as an eolina range `|s.e|` where `s` is the inclusive relative
+/// start and `e` exclusive relative end. Negative values denote relative from
+/// the end.
 ///
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct EolinaRange {
@@ -311,7 +253,7 @@ impl EolinaRange {
 
 impl From<RangeFrom<isize>> for EolinaRange {
     ///
-    /// Creates a new [`OptionRange`] from the given [`RangeFrom`].
+    /// Creates a new [`EolinaRange`] from the given [`RangeFrom`].
     ///
     fn from(range_from: RangeFrom<isize>) -> Self {
         Self {
@@ -323,7 +265,7 @@ impl From<RangeFrom<isize>> for EolinaRange {
 
 impl From<RangeTo<isize>> for EolinaRange {
     ///
-    /// Creates a new [`OptionRange`] from the given [`RangeTo`].
+    /// Creates a new [`EolinaRange`] from the given [`RangeTo`].
     ///
     fn from(range_to: RangeTo<isize>) -> Self {
         Self {
@@ -335,7 +277,7 @@ impl From<RangeTo<isize>> for EolinaRange {
 
 impl From<Range<isize>> for EolinaRange {
     ///
-    /// Creates a new [`OptionRange`] from the given [`Range`].
+    /// Creates a new [`EolinaRange`] from the given [`Range`].
     ///
     fn from(range: Range<isize>) -> Self {
         Self {
@@ -347,7 +289,7 @@ impl From<Range<isize>> for EolinaRange {
 
 impl From<RangeFull> for EolinaRange {
     ///
-    /// Creates a new [`OptionRange`] from the given [`RangeFull`].
+    /// Creates a new [`EolinaRange`] from the given [`RangeFull`].
     ///
     fn from(_range_full: RangeFull) -> Self {
         Self {

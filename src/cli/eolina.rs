@@ -39,20 +39,14 @@ original and my implementation.",
             ]);
 
         // global options
-        app = app.args(&[
-            Arg::with_name("color")
-                .long("color")
-                .short("c")
-                .alias("colour")
-                .help("Whether or not to use colored output")
-                .value_name("MODE")
-                .default_value("auto")
-                .possible_values(&["on", "auto", "off"]),
-            Arg::with_name("repl")
-                .long("repl")
-                .short("r")
-                .help("Enters an interactive read-eval-print-loop"),
-        ]);
+        app = app.args(&[Arg::with_name("color")
+            .long("color")
+            .short("c")
+            .alias("colour")
+            .help("Whether or not to use colored output")
+            .value_name("MODE")
+            .default_value("auto")
+            .possible_values(&["on", "auto", "off"])]);
 
         // args
         app = app.args(&[
@@ -111,7 +105,7 @@ original and my implementation.",
                 .expect("color has a default value"),
             atty::is(atty::Stream::Stdout) && atty::is(atty::Stream::Stdin),
         ) {
-            ("on", true) | ("auto", true) => io::Mode::Colorful,
+            ("on" | "auto", true) => io::Mode::Colorful,
             ("on", false) => {
                 return Err(Error::User(
                     "`color=on` is not allowed in non-tty env".to_owned(),
@@ -150,7 +144,7 @@ original and my implementation.",
 /// Executes the default command, which takes a program and optional inputs.
 /// If no inputs are given they are read form stdin during execution.
 ///
-/// **Note**: Program errors are propagated.
+/// **Note**: Program errors **are** propagated.
 ///
 /// ### Returns
 ///
@@ -160,7 +154,7 @@ original and my implementation.",
 ///   * the program was was a file path but an error occured opening the file
 ///   * the program file could not be read
 ///   * the program was neither a path nor a valid program
-///   * the exec context failed
+///   * the program context failed
 ///
 fn cmd_eval<'a>(
     mode: io::Mode,
@@ -190,7 +184,7 @@ fn cmd_eval<'a>(
         }
     };
 
-    let mut io = Io::with(
+    let mut io = Io::new(
         mode,
         ("[".to_owned(), "]: ".to_owned()),
         ("[".to_owned(), "]: ".to_owned()),
@@ -208,7 +202,7 @@ fn cmd_eval<'a>(
 ///
 /// Executes the repl command, which executes programs interactively.
 ///
-/// **Note**: Program errors are **not** propagated.
+/// **Note**: Program errors **are not** propagated.
 ///
 /// ### Returns
 ///
@@ -225,9 +219,9 @@ fn cmd_repl(mode: io::Mode) -> Result<(), Error> {
         return Err(Error::User("cannot start repl in a non-tty env".to_owned()));
     }
 
-    let mut io = Io::with(mode, (None, None), ("[".to_owned(), "]: ".to_owned()));
+    let mut io = Io::new(mode, (None, None), ("[".to_owned(), "]: ".to_owned()));
 
-    let mut exec_io = Io::with(
+    let mut exec_io = Io::new(
         mode,
         ("[".to_owned(), "]: ".to_owned()),
         ("[".to_owned(), "]: ".to_owned()),

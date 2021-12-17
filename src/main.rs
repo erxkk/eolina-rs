@@ -1,4 +1,4 @@
-#![feature(derive_default_enum, iter_intersperse, generators, generator_trait)]
+#![feature(derive_default_enum, iter_intersperse, generator_trait)]
 #![allow(dead_code)]
 
 mod cli;
@@ -9,8 +9,8 @@ mod program;
 mod repl;
 
 fn main() -> color_eyre::Result<()> {
-    // TODO: program analysis and fancy parsing error reporting via miette
-    // TODO: use raw terminal to allow reply history?
+    // TODO: post v1: program analysis and fancy parsing error reporting via miette
+    // TODO: post v1: use raw terminal to allow reply history?
 
     color_eyre::install()?;
     cli::Eolina::new().run()?;
