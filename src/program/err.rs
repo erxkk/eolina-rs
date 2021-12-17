@@ -1,6 +1,9 @@
 use super::Kind;
 use crate::helper::{EolinaRange, EolinaRangeBound};
-use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::{
+    cmp::Ordering::Greater,
+    fmt::{Display, Formatter, Result as FmtResult},
+};
 
 ///
 /// An error that can occur during program execution.
@@ -65,25 +68,21 @@ impl Display for Error {
 
                 f.write_str("slice error: ")?;
 
-                // TODO: this can probably be improved
-                if start < 0 && end < 0 {
-                    write!(f, "start & end < 0 ({}, {})", start, end)
-                } else if start < 0 {
-                    write!(f, "start < 0 ({})", start)
-                } else if end < 0 {
-                    write!(f, "end < 0 ({})", start)
-                } else if start > length && end > length {
-                    write!(f, "start & end > len ({}, {} > {})", start, end, length)
-                } else if end > length {
-                    write!(f, "end > len ({} > {})", end, length)
-                } else if start > length {
-                    write!(f, "start > len ({} > {})", end, length)
-                } else {
-                    unreachable!(
-                        "invalid branch:\ngiven: {}\ntranslated: {}\nlen: {}",
-                        given, translated, length
-                    )
-                }?;
+                match (start > 0, end > 0) {
+                    (true, true) => write!(f, "start & end < 0 ({}, {})", start, end)?,
+                    (true, _) => write!(f, "start < 0 ({})", start)?,
+                    (_, true) => write!(f, "end < 0 ({})", start)?,
+                    _ => {}
+                };
+
+                match (start.cmp(&length), end.cmp(&length)) {
+                    (Greater, Greater) => {
+                        write!(f, "start & end > len ({}, {} > {})", start, end, length)?
+                    }
+                    (Greater, _) => write!(f, "start > len ({} > {})", end, length)?,
+                    (_, Greater) => write!(f, "end > len ({} > {})", end, length)?,
+                    _ => {}
+                };
 
                 write!(f, " (rel {} => abs {})", given, translated)?;
                 Ok(())

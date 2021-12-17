@@ -1,4 +1,10 @@
-#![feature(derive_default_enum, iter_intersperse, generator_trait)]
+#![feature(
+    derive_default_enum,
+    iter_intersperse,
+    half_open_range_patterns,
+    exclusive_range_pattern,
+    generator_trait
+)]
 #![allow(dead_code)]
 
 mod cli;
