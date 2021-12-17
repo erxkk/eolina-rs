@@ -245,8 +245,6 @@ pub fn next_token(input: &str) -> Result<(&str, Token, usize), Error> {
     type Single<'a> = Result<(&'a str, &'a str), NomErr<NomError<&'a str>>>;
     type SingleOpt<'a> = Result<(&'a str, Option<&'a str>), NomErr<NomError<&'a str>>>;
     type Double<'a> = Result<(&'a str, (&'a str, &'a str)), NomErr<NomError<&'a str>>>;
-
-    // no i really don't wnat to talk about it
     type NestedDouble<'a> = Result<
         (
             &'a str,
@@ -258,16 +256,9 @@ pub fn next_token(input: &str) -> Result<(&str, Token, usize), Error> {
         NomErr<NomError<&'a str>>,
     >;
 
-    // TODO: if type_ascription is stabilized and supported by rust-analyzer, these can be evaluated one at a time
     let single_res: Single = alt(single)(trimmed);
-    let double_res: Double = alt(double)(trimmed);
-    let split_res: SingleOpt = split(trimmed);
-    let filter_res: Single = filter(trimmed);
-    let map_res: Single = map(trimmed);
-    let slice_res: NestedDouble = slice(trimmed);
-
     if let Ok((rest, parsed)) = single_res {
-        Ok((
+        return Ok((
             rest,
             match parsed {
                 "<" => Token::In,
@@ -282,21 +273,30 @@ pub fn next_token(input: &str) -> Result<(&str, Token, usize), Error> {
                 _ => unimplemented!("missing single branches"),
             },
             tirmlen + 1,
-        ))
-    } else if let Ok((rest, (_, second))) = double_res {
-        Ok((
+        ));
+    }
+
+    let double_res: Double = alt(double)(trimmed);
+    if let Ok((rest, (_, second))) = double_res {
+        return Ok((
             rest,
             Token::Rotate(second.parse().unwrap_or(1)),
             tirmlen + 1 + second.len(),
-        ))
-    } else if let Ok((rest, optional)) = split_res {
-        Ok((
+        ));
+    }
+
+    let split_res: SingleOpt = split(trimmed);
+    if let Ok((rest, optional)) = split_res {
+        return Ok((
             rest,
             Token::Split(optional),
             tirmlen + optional.map(|str| str.len() + 4).unwrap_or(2),
-        ))
-    } else if let Ok((rest, parsed)) = map_res {
-        Ok((
+        ));
+    }
+
+    let map_res: Single = map(trimmed);
+    if let Ok((rest, parsed)) = map_res {
+        return Ok((
             rest,
             match parsed {
                 "_" => Token::Map(Map::Lower),
@@ -305,9 +305,12 @@ pub fn next_token(input: &str) -> Result<(&str, Token, usize), Error> {
                 _ => unimplemented!("missing map branches"),
             },
             tirmlen + 3,
-        ))
-    } else if let Ok((rest, parsed)) = filter_res {
-        Ok((
+        ));
+    }
+
+    let filter_res: Single = filter(trimmed);
+    if let Ok((rest, parsed)) = filter_res {
+        return Ok((
             rest,
             match parsed {
                 "v" => Token::Filter(Check::Vowel),
@@ -317,8 +320,11 @@ pub fn next_token(input: &str) -> Result<(&str, Token, usize), Error> {
                 _ => unimplemented!("missing filter branches"),
             },
             tirmlen + 3,
-        ))
-    } else if let Ok((rest, (first, second))) = slice_res {
+        ));
+    }
+
+    let slice_res: NestedDouble = slice(trimmed);
+    if let Ok((rest, (first, second))) = slice_res {
         let parser = |(sign, num): (Option<&str>, &str)| {
             (sign.is_some(), num.parse().expect("combinator must fail"))
         };
@@ -326,7 +332,7 @@ pub fn next_token(input: &str) -> Result<(&str, Token, usize), Error> {
         let counter =
             |(sign, num): (Option<&str>, &str)| num.len() + if sign.is_some() { 1 } else { 0 };
 
-        Ok((
+        return Ok((
             rest,
             Token::Slice(EolinaRange::components(
                 first.map(parser),
@@ -336,10 +342,10 @@ pub fn next_token(input: &str) -> Result<(&str, Token, usize), Error> {
                 + 3
                 + first.map(counter).unwrap_or_default()
                 + second.map(counter).unwrap_or_default(),
-        ))
-    } else {
-        Err(Error::Unknown(input.to_owned()))
+        ));
     }
+
+    Err(Error::Unknown(input.to_owned()))
 }
 
 #[cfg(test)]
