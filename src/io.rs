@@ -160,7 +160,7 @@ impl Io {
         msg: impl Display,
     ) -> io::Result<()> {
         // ignore muted, or log messages on lean
-        if self.mode == Mode::Lean && kind > Kind::Output {
+        if self.mode < Mode::Lean && kind > Kind::Output {
             return Ok(());
         }
 
@@ -231,16 +231,21 @@ impl Io {
 #[repr(u8)]
 pub enum Mode {
     ///
+    /// Hides all log messages.
+    ///
+    Muted = 0,
+
+    ///
     /// Lean input/output, no prompts or colors are used and no log messages are issued,
     /// useful for piped input/output.
     ///
     #[default]
-    Lean = 0,
+    Lean = 1,
 
     ///
     /// Colorful prompts and logs are used for a interactive input/output.
     ///
-    Colorful = 1,
+    Colorful = 2,
 }
 
 ///

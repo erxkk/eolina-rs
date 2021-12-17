@@ -4,8 +4,8 @@ use crate::{
     parse::LazyGen,
     program, repl,
 };
-use clap::{crate_version, App, AppSettings, Arg, ArgGroup, Shell, SubCommand};
-use std::{collections::VecDeque, fs, io::Read};
+use clap::{crate_version, App, AppSettings, Arg, Shell, SubCommand};
+use std::{borrow::Cow, collections::VecDeque, fs, io::Read};
 
 ///
 /// Encapsualtes the whole command line application.
@@ -39,21 +39,20 @@ original and my implementation.",
             ]);
 
         // global options
-        app = app
-            .args(&[
-                Arg::with_name("color")
-                    .long("color")
-                    .short("c")
-                    .alias("colour")
-                    .help("Whether or not to use colored output, defaults to [auto]")
-                    .value_name("MODE")
-                    .possible_values(&["on", "auto", "off"]),
-                Arg::with_name("quiet")
-                    .long("quiet")
-                    .short("q")
-                    .help("Short hand for `--color off | -c off`"),
-            ])
-            .group(ArgGroup::with_name("color_or_quiet").args(&["color", "quiet"]));
+        app = app.args(&[
+            Arg::with_name("color")
+                .long("color")
+                .short("c")
+                .alias("colour")
+                .help("Whether or not to use colored output")
+                .value_name("MODE")
+                .default_value("auto")
+                .possible_values(&["on", "auto", "off"]),
+            Arg::with_name("quiet")
+                .long("quiet")
+                .short("q")
+                .help("Whether or not there should be any log messages"),
+        ]);
 
         // args
         app = app.args(&[
@@ -76,15 +75,19 @@ original and my implementation.",
                 .about("Generates a completion file for the given shell")
                 .arg(
                     Arg::with_name("shell")
-                        .value_name("SHELL")
-                        .required(true)
-                        .possible_values(&["all", "bash", "elvish", "fish", "pwsh", "zsh"]),
+                        .long("shell")
+                        .short("s")
+                        .value_name("SHELL|ALL")
+                        .help("The shell to generateo completions for supported shells [bash|elvish|fish|pwsh|zsh]")
+                        .required(false),
                 )
                 .arg(
                     Arg::with_name("path")
+                        .long("path")
+                        .short("p")
                         .value_name("PATH")
-                        .help("The folder to save the completion file(s) to")
-                        .required(true),
+                        .help("The folder to save the completion file(s) to, defaults to the value of $PWD")
+                        .required(false),
                 ),
         ]);
 
@@ -107,10 +110,12 @@ original and my implementation.",
         let matches = self.app.clone().get_matches();
 
         let mode = if matches.is_present("quiet") {
-            io::Mode::Lean
+            io::Mode::Muted
         } else {
             match (
-                matches.value_of("color").unwrap_or("auto"),
+                matches
+                    .value_of("color")
+                    .expect("color has a defautl value"),
                 atty::is(atty::Stream::Stdout) && atty::is(atty::Stream::Stdin),
             ) {
                 ("on" | "auto", true) => io::Mode::Colorful,
@@ -127,11 +132,9 @@ original and my implementation.",
         // args are always Some() if a subcommand was used
         match matches.subcommand() {
             ("repl", Some(_)) => cmd_repl(mode),
-            ("completions", Some(args)) => cmd_completions(
-                mode,
-                args.value_of("shell").expect("shell is required"),
-                args.value_of("path").expect("path is required"),
-            ),
+            ("completions", Some(args)) => {
+                cmd_completions(mode, args.value_of("shell"), args.value_of("path"))
+            }
             // having both subcommands and required args on the first level doesn't work well with
             // AppSettings::ArgRequiredElseHelp, so we handle it ourselves
             ("", None) => {
@@ -242,8 +245,6 @@ fn cmd_repl(mode: io::Mode) -> Result<(), Error> {
     Ok(())
 }
 
-// TODO: make args optional
-
 ///
 /// Executes the completions command, which generates a completion file(s) for a given shell.
 ///
@@ -257,20 +258,46 @@ fn cmd_repl(mode: io::Mode) -> Result<(), Error> {
 ///   * the program was neither a path nor a valid program
 ///   * the repl context failed
 ///
-fn cmd_completions<'a>(_mode: io::Mode, shell: &'a str, path: &'a str) -> Result<(), Error> {
-    let shell = match shell {
-        "all" => None,
-        "bash" => Some(Shell::Bash),
-        "elvish" => Some(Shell::Elvish),
-        "fish" => Some(Shell::Fish),
-        "pwsh" => Some(Shell::PowerShell),
-        "zsh" => Some(Shell::Zsh),
-        _ => unreachable!("validator failed: invalid shell passed through `{}`", shell),
+fn cmd_completions(mode: io::Mode, shell: Option<&str>, path: Option<&str>) -> Result<(), Error> {
+    let mut io = Io::new(mode).log("[".to_owned(), "]: ".to_owned());
+
+    let shell = if let Some(shell) = shell {
+        Cow::Borrowed(shell)
+    } else {
+        let shell = std::env::var("SHELL")?;
+        io.write_expect(io::Kind::Info, None, format!("using $SHELL '{}'", shell));
+
+        Cow::Owned(
+            shell
+                .split('/')
+                .last()
+                .expect("split always returns at least self")
+                .to_owned(),
+        )
+    };
+
+    // account for non set and absolute path
+    let shell = match shell.as_ref() {
+        "ALL" | "all" => None,
+        "bash" | "/bin/bash" => Some(Shell::Bash),
+        "elvish" | "/bin/elvish" => Some(Shell::Elvish),
+        "fish" | "/bin/fish" => Some(Shell::Fish),
+        "pwsh" | "/bin/pwsh" => Some(Shell::PowerShell),
+        "zsh" | "/bin/zsh" => Some(Shell::Zsh),
+        _ => return Err(Error::User(format!("unknown shell: '{}'", shell))),
+    };
+
+    let path = if let Some(path) = path {
+        Cow::Borrowed(path)
+    } else {
+        let pwd = std::env::var("PWD")?;
+        io.write_expect(io::Kind::Info, None, format!("using $PWD '{}'", pwd));
+        Cow::Owned(pwd)
     };
 
     let mut app = Eolina::new().app;
     if let Some(shell) = shell {
-        app.gen_completions("eolina-rs", shell, path);
+        app.gen_completions("eolina-rs", shell, path.as_ref());
     } else {
         for shell in [
             Shell::Bash,
@@ -279,7 +306,7 @@ fn cmd_completions<'a>(_mode: io::Mode, shell: &'a str, path: &'a str) -> Result
             Shell::PowerShell,
             Shell::Zsh,
         ] {
-            app.gen_completions("eolina-rs", shell, path);
+            app.gen_completions("eolina-rs", shell, path.as_ref());
         }
     }
 

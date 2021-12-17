@@ -16,6 +16,12 @@ pub enum Error {
     Program(#[from] crate::program::Error),
 
     ///
+    /// An error occured during envar access.
+    ///
+    #[error("env error")]
+    Env(#[from] std::env::VarError),
+
+    ///
     /// An error occured during repl execution.
     ///
     #[error("repl error")]

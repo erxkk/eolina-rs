@@ -48,7 +48,7 @@ impl Display for Error {
             Self::SliceIncompatible(given, translated, length) => {
                 write!(
                     f,
-                    "slice error: start > end ({} > {}) (`{}` => `{}`)",
+                    "slice error: start > end ({} > {}) ('{}' => '{}')",
                     translated.start.unwrap_or(EolinaRangeBound::Start(0)),
                     translated.end.unwrap_or(EolinaRangeBound::Start(*length)),
                     given,
@@ -91,26 +91,26 @@ impl Display for Error {
                 if expected.len() == 1 {
                     write!(
                         f,
-                        "arg mismatch: expected `{}`, found `{}`",
+                        "arg mismatch: expected '{}', found '{}'",
                         expected[0], actual
                     )
                 } else {
                     write!(f, "arg mismatch: expected any of")?;
 
                     let mut iter = expected.iter();
-                    write!(f, " `{}`", iter.next().expect("no expected args given"))?;
+                    write!(f, " '{}'", iter.next().expect("no expected args given"))?;
 
                     for expected in iter {
-                        write!(f, ", `{}`", expected)?;
+                        write!(f, ", '{}'", expected)?;
                     }
 
-                    write!(f, ", found `{}`", actual)?;
+                    write!(f, ", found '{}'", actual)?;
 
                     Ok(())
                 }
             }
             Self::Mismatch(left, right) => {
-                write!(f, "type mismatch: `{}` != `{}`", left, right)
+                write!(f, "type mismatch: '{}' != '{}'", left, right)
             }
             Self::QueueEmpty => f.write_str("No value found on queue"),
         }
