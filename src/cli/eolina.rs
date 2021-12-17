@@ -4,7 +4,7 @@ use crate::{
     parse::LazyGen,
     program, repl,
 };
-use clap::{crate_version, App, AppSettings, Arg, Shell, SubCommand};
+use clap::{crate_version, App, AppSettings, Arg, ArgGroup, Shell, SubCommand};
 use std::{collections::VecDeque, fs, io::Read};
 
 ///
@@ -31,7 +31,7 @@ A cli interface for Eolina, an esotheric string manipulation language.
 There may be minor differences in the parsing or interpretation of the
 original and my implementation.",
             )
-            .settings(&[
+            .global_settings(&[
                 AppSettings::ArgsNegateSubcommands,
                 AppSettings::ColoredHelp,
                 AppSettings::DeriveDisplayOrder,
@@ -39,14 +39,21 @@ original and my implementation.",
             ]);
 
         // global options
-        app = app.args(&[Arg::with_name("color")
-            .long("color")
-            .short("c")
-            .alias("colour")
-            .help("Whether or not to use colored output")
-            .value_name("MODE")
-            .default_value("auto")
-            .possible_values(&["on", "auto", "off"])]);
+        app = app
+            .args(&[
+                Arg::with_name("color")
+                    .long("color")
+                    .short("c")
+                    .alias("colour")
+                    .help("Whether or not to use colored output, defaults to [auto]")
+                    .value_name("MODE")
+                    .possible_values(&["on", "auto", "off"]),
+                Arg::with_name("quiet")
+                    .long("quiet")
+                    .short("q")
+                    .help("Short hand for `--color off | -c off`"),
+            ])
+            .group(ArgGroup::with_name("color_or_quiet").args(&["color", "quiet"]));
 
         // args
         app = app.args(&[
@@ -99,20 +106,22 @@ original and my implementation.",
         // let clap handle --version/--help etc
         let matches = self.app.clone().get_matches();
 
-        let mode = match (
-            matches
-                .value_of("color")
-                .expect("color has a default value"),
-            atty::is(atty::Stream::Stdout) && atty::is(atty::Stream::Stdin),
-        ) {
-            ("on" | "auto", true) => io::Mode::Colorful,
-            ("on", false) => {
-                return Err(Error::User(
-                    "`color=on` is not allowed in non-tty env".to_owned(),
-                ))
+        let mode = if matches.is_present("quiet") {
+            io::Mode::Lean
+        } else {
+            match (
+                matches.value_of("color").unwrap_or("auto"),
+                atty::is(atty::Stream::Stdout) && atty::is(atty::Stream::Stdin),
+            ) {
+                ("on" | "auto", true) => io::Mode::Colorful,
+                ("on", false) => {
+                    return Err(Error::User(
+                        "`color=on` is not allowed in non-tty env".to_owned(),
+                    ))
+                }
+                ("auto", false) | ("off", _) => io::Mode::Lean,
+                _ => unreachable!(),
             }
-            ("auto", false) | ("off", _) => io::Mode::Lean,
-            _ => unreachable!(),
         };
 
         // args are always Some() if a subcommand was used
