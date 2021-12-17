@@ -13,6 +13,7 @@ pub struct Io {
     stdin: Stdin,
     stdout: Stdout,
     stderr: Stderr,
+    prepared_in: Option<Vec<String>>,
     pub io_pre_prompt: Option<String>,
     pub io_post_prompt: Option<String>,
     pub log_pre_prompt: Option<String>,
@@ -24,23 +25,50 @@ impl Io {
     ///
     /// Creates a new [`Io`] with the given pre- and post-prompts.
     ///
-    pub fn new(
-        mode: Mode,
-        io_prompts: (impl Into<Option<String>>, impl Into<Option<String>>),
-        log_prompts: (impl Into<Option<String>>, impl Into<Option<String>>),
-    ) -> Self {
-        let (io_pre_prompt, io_post_prompt) = (io_prompts.0.into(), io_prompts.1.into());
-        let (log_pre_prompt, log_post_prompt) = (log_prompts.0.into(), log_prompts.1.into());
-
+    pub fn new(mode: Mode) -> Self {
         Self {
             stdin: io::stdin(),
             stdout: io::stdout(),
             stderr: io::stderr(),
-            io_pre_prompt,
-            io_post_prompt,
-            log_pre_prompt,
-            log_post_prompt,
+            prepared_in: None,
+            io_pre_prompt: None,
+            io_post_prompt: None,
+            log_pre_prompt: None,
+            log_post_prompt: None,
             mode,
+        }
+    }
+
+    ///
+    /// Uses the given prompts for input and regular output.
+    ///
+    pub fn io(self, pre: impl Into<Option<String>>, post: impl Into<Option<String>>) -> Self {
+        Self {
+            io_pre_prompt: pre.into(),
+            io_post_prompt: post.into(),
+            ..self
+        }
+    }
+
+    ///
+    /// Uses the given prompts for log output.
+    ///
+    pub fn log(self, pre: impl Into<Option<String>>, post: impl Into<Option<String>>) -> Self {
+        Self {
+            log_pre_prompt: pre.into(),
+            log_post_prompt: post.into(),
+            ..self
+        }
+    }
+
+    ///
+    /// Attatches a [`Vec<String>`] to pop as input before using [`Stdin`],
+    /// no prompts are issued on these read requests, even if they are enabled.
+    ///
+    pub fn attach(self, prepared_in: Vec<String>) -> Self {
+        Self {
+            prepared_in: Some(prepared_in),
+            ..self
         }
     }
 
@@ -70,7 +98,12 @@ impl Io {
     ///   * [`Stdin`] was read from unsuccessful
     ///
     pub fn read<'a>(&mut self, prompt: impl Into<Option<&'a str>>) -> io::Result<String> {
-        // use `in_mode` as the prompts are for the reading input
+        if let Some(vec) = &mut self.prepared_in {
+            if let Some(input) = vec.pop() {
+                return Ok(input);
+            }
+        }
+
         if self.mode >= Mode::Colorful {
             if let Some(prompt) = prompt.into() {
                 if let Some(pre_prompt) = &self.io_pre_prompt {

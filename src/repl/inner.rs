@@ -69,8 +69,15 @@ impl<'a> Context<'a> {
                 continue 'outer;
             }
 
-            let mut program =
-                ProgramContext::new(&input, LazyGen::new(&input), self.exec_io, &mut self.values);
+            let gen = match LazyGen::new(&input).eager() {
+                Ok(gen) => gen,
+                Err(err) => {
+                    self.io.write_expect(Kind::Error, None, err);
+                    continue 'outer;
+                }
+            };
+
+            let mut program = ProgramContext::new(&input, gen, self.exec_io, &mut self.values);
 
             'inner: loop {
                 match Pin::new(&mut program).resume(()) {
@@ -80,7 +87,7 @@ impl<'a> Context<'a> {
                             Ok(_) => {}
                             Err(err) => self.io.write_expect(Kind::Error, None, err),
                         }
-                        break 'inner;
+                        continue 'outer;
                     }
                 }
             }

@@ -138,8 +138,6 @@ original and my implementation.",
     }
 }
 
-// TODO: pipe inputs into Io if given directly
-
 ///
 /// Executes the default command, which takes a program and optional inputs.
 /// If no inputs are given they are read form stdin during execution.
@@ -159,7 +157,7 @@ original and my implementation.",
 fn cmd_eval<'a>(
     mode: io::Mode,
     program: &'a str,
-    _inputs: Option<impl Iterator<Item = &'a str>>,
+    inputs: Option<impl DoubleEndedIterator<Item = &'a str>>,
 ) -> Result<(), Error> {
     let mut queue = VecDeque::new();
     let mut file_contents = String::new();
@@ -184,14 +182,17 @@ fn cmd_eval<'a>(
         }
     };
 
-    let mut io = Io::new(
-        mode,
-        ("[".to_owned(), "]: ".to_owned()),
-        ("[".to_owned(), "]: ".to_owned()),
-    );
+    let mut io = Io::new(mode)
+        .io("[".to_owned(), "]: ".to_owned())
+        .log("[".to_owned(), "]: ".to_owned());
+
+    if let Some(inputs) = inputs {
+        // reverse because they are poped back to front
+        io = io.attach(inputs.rev().map(ToOwned::to_owned).collect());
+    }
 
     // create an executor context
-    let context = program::Context::new(input, LazyGen::new(input), &mut io, &mut queue);
+    let context = program::Context::new(input, LazyGen::new(input).eager()?, &mut io, &mut queue);
 
     // execute it
     context.run()?;
@@ -219,13 +220,11 @@ fn cmd_repl(mode: io::Mode) -> Result<(), Error> {
         return Err(Error::User("cannot start repl in a non-tty env".to_owned()));
     }
 
-    let mut io = Io::new(mode, (None, None), ("[".to_owned(), "]: ".to_owned()));
+    let mut io = Io::new(mode).log("[".to_owned(), "]: ".to_owned());
 
-    let mut exec_io = Io::new(
-        mode,
-        ("[".to_owned(), "]: ".to_owned()),
-        ("[".to_owned(), "]: ".to_owned()),
-    );
+    let mut exec_io = Io::new(mode)
+        .io("[".to_owned(), "]: ".to_owned())
+        .log("[".to_owned(), "]: ".to_owned());
 
     let mut context = repl::Context::new(&mut io, &mut exec_io);
 

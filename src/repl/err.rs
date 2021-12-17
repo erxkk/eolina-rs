@@ -10,6 +10,12 @@ pub enum Error {
     UnknownCommand(String),
 
     ///
+    /// An error occured during program parsing.
+    ///
+    #[error("parse error")]
+    Parse(#[from] crate::parse::Error),
+
+    ///
     /// An error occured during program execution.
     ///
     #[error("exec error")]

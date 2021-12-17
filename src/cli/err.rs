@@ -4,6 +4,12 @@
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     ///
+    /// An error occured during program parsing.
+    ///
+    #[error("parse error")]
+    Parse(#[from] crate::parse::Error),
+
+    ///
     /// An error occured during a program execution.
     ///
     #[error("execution error")]
