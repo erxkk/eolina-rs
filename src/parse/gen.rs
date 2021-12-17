@@ -1,5 +1,6 @@
 use super::{next_token, Error, Token};
 use std::{
+    cmp::Ordering,
     ops::{Generator, GeneratorState},
     pin::Pin,
 };
@@ -126,14 +127,16 @@ impl<'t> Generator for EagerGen<'t> {
     fn resume(self: Pin<&mut Self>, _arg: ()) -> GeneratorState<Self::Yield, Self::Return> {
         let this = Pin::into_inner(self);
 
-        if this.yield_at > this.tokens.len() {
-            panic!("resumed genarator after completion wihtout reset");
-        } else if this.yield_at == this.tokens.len() {
-            GeneratorState::Complete(Ok(()))
-        } else {
-            let yielded = this.tokens[this.yield_at];
-            this.yield_at += 1;
-            GeneratorState::Yielded(yielded)
+        match this.yield_at.cmp(&this.tokens.len()) {
+            Ordering::Greater => {
+                panic!("resumed genarator after completion wihtout reset");
+            }
+            Ordering::Equal => GeneratorState::Complete(Ok(())),
+            _ => {
+                let yielded = this.tokens[this.yield_at];
+                this.yield_at += 1;
+                GeneratorState::Yielded(yielded)
+            }
         }
     }
 }
