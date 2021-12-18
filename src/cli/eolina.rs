@@ -62,7 +62,7 @@ pub struct Eolina {
     /// Whether or not to use colored output
     ///
     #[clap(
-        short, long, alias = "colour", possible_values = ["on", "off", "auto"],
+        short, long, possible_values = ["on", "off", "auto"],
         default_value_t = Default::default()
     )]
     color: Color,
@@ -86,7 +86,7 @@ pub struct Eolina {
     inputs: Vec<String>,
 
     ///
-    ///
+    /// A subcommand to execute.
     ///
     #[clap(subcommand)]
     subcommand: Option<SubCommand>,
