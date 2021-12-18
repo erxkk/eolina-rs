@@ -1,6 +1,8 @@
 #![feature(derive_default_enum, generator_trait, iter_intersperse, once_cell)]
 #![allow(dead_code)]
 
+use clap::Parser;
+
 mod cli;
 mod helper;
 mod io;
@@ -13,6 +15,6 @@ fn main() -> eyre::Result<()> {
     // TODO: post v1: use raw terminal to allow reply history?
 
     color_eyre::install()?;
-    cli::Eolina::new().run()?;
+    cli::Eolina::parse().run()?;
     Ok(())
 }
