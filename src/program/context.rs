@@ -85,7 +85,7 @@ where
     ///   * the function was not successfully executed
     ///   * an IO operation failed
     ///
-    fn next_token(&mut self, token: Token) -> Result<(), Error> {
+    fn next_token(&mut self, token: Token) -> eyre::Result<()> {
         match token {
             Token::In => {
                 let mut val = self.io.read_expect(self.get_context().as_str());
@@ -166,14 +166,15 @@ where
         Ok(())
     }
 
+    // TODO: doc
     ///
     ///
     ///
-    pub fn run(mut self) -> Result<(), Error> {
+    pub fn run(mut self) -> eyre::Result<()> {
         loop {
             match Pin::new(&mut self).resume(()) {
                 GeneratorState::Yielded(_) => continue,
-                GeneratorState::Complete(res) => break res,
+                GeneratorState::Complete(res) => break res.map_err(|err| err.into()),
             }
         }
     }
@@ -184,7 +185,7 @@ where
     G: Gen<'p> + Unpin,
 {
     type Yield = ();
-    type Return = Result<(), Error>;
+    type Return = eyre::Result<()>;
 
     ///
     /// Attempts to parse and execute the next instruction.

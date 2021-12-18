@@ -41,7 +41,7 @@ impl<'a> Context<'a> {
     /// * [`Err`]
     ///   * the [`Context`] was not successful run
     ///
-    pub fn run(&mut self) -> Result<(), Error> {
+    pub fn run(&mut self) -> eyre::Result<()> {
         'outer: loop {
             let mut input = self.io.read_expect(">>> ");
 
@@ -106,7 +106,7 @@ impl<'a> Context<'a> {
     ///   * the command was not executed successfully contains the
     ///     error reason
     ///
-    fn command(&mut self, cmd: &str) -> Result<bool, Error> {
+    fn command(&mut self, cmd: &str) -> eyre::Result<bool> {
         match cmd {
             "help" | "h" => {
                 let commands = [
@@ -141,7 +141,7 @@ impl<'a> Context<'a> {
                 Ok(false)
             }
             "exit" => Ok(true),
-            _ => Err(Error::UnknownCommand(cmd.to_owned())),
+            _ => eyre::bail!(Error::UnknownCommand(cmd.to_owned())),
         }
     }
 }

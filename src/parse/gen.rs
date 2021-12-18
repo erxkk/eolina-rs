@@ -1,4 +1,4 @@
-use super::{next_token, Error, Token};
+use super::{next_token, Token};
 use std::{
     cmp::Ordering,
     ops::{Generator, GeneratorState},
@@ -8,7 +8,7 @@ use std::{
 ///
 /// A **reusable** token generator.
 ///
-pub trait Gen<'t>: Generator<Yield = (Token<'t>, usize), Return = Result<(), Error>> {
+pub trait Gen<'t>: Generator<Yield = (Token<'t>, usize), Return = eyre::Result<()>> {
     ///
     /// Returns this [`Gen`]'s token slice.
     ///
@@ -44,14 +44,14 @@ impl<'t> LazyGen<'t> {
     ///
     /// Attempts to creates a new [`EagerGen`] from this [`LazyGen`].
     ///
-    pub fn eager(self) -> Result<EagerGen<'t>, Error> {
+    pub fn eager(self) -> eyre::Result<EagerGen<'t>> {
         EagerGen::new(self.program)
     }
 }
 
 impl<'t> Generator for LazyGen<'t> {
     type Yield = (Token<'t>, usize);
-    type Return = Result<(), Error>;
+    type Return = eyre::Result<()>;
 
     fn resume(self: Pin<&mut Self>, _arg: ()) -> GeneratorState<Self::Yield, Self::Return> {
         let this = Pin::into_inner(self);
@@ -98,7 +98,7 @@ impl<'a> EagerGen<'a> {
     ///
     /// Attempts creating a new [`EagerGen`] for the given `input` string.
     ///
-    pub fn new(input: &'a str) -> Result<Self, Error> {
+    pub fn new(input: &'a str) -> eyre::Result<Self> {
         let mut lazy = LazyGen::new(input);
         let mut tokens = vec![];
 
@@ -122,7 +122,7 @@ impl<'a> EagerGen<'a> {
 
 impl<'t> Generator for EagerGen<'t> {
     type Yield = (Token<'t>, usize);
-    type Return = Result<(), Error>;
+    type Return = eyre::Result<()>;
 
     fn resume(self: Pin<&mut Self>, _arg: ()) -> GeneratorState<Self::Yield, Self::Return> {
         let this = Pin::into_inner(self);

@@ -105,7 +105,7 @@ original and my implementation.",
     ///   * the program arguments are invalid
     ///   * an exec/repl context failed
     ///
-    pub fn run(mut self) -> Result<(), Error> {
+    pub fn run(mut self) -> eyre::Result<()> {
         // let clap handle --version/--help etc
         let matches = self.app.clone().get_matches();
 
@@ -120,9 +120,9 @@ original and my implementation.",
             ) {
                 ("on" | "auto", true) => io::Mode::Colorful,
                 ("on", false) => {
-                    return Err(Error::User(
+                    eyre::bail!(Error::User(
                         "`color=on` is not allowed in non-tty env".to_owned(),
-                    ))
+                    ));
                 }
                 ("auto", false) | ("off", _) => io::Mode::Lean,
                 _ => unreachable!(),
@@ -170,7 +170,7 @@ fn cmd_eval<'a>(
     mode: io::Mode,
     program: &'a str,
     inputs: Option<impl DoubleEndedIterator<Item = &'a str>>,
-) -> Result<(), Error> {
+) -> eyre::Result<()> {
     let mut queue = VecDeque::new();
     let mut file_contents = String::new();
 
@@ -185,7 +185,7 @@ fn cmd_eval<'a>(
             Err(err) => {
                 // failed beacuse of any other error than file not found
                 if err.kind() != std::io::ErrorKind::NotFound {
-                    return Err(Error::Io(err));
+                    eyre::bail!(Error::Io(err));
                 }
 
                 // try using the input directly
@@ -227,9 +227,9 @@ fn cmd_eval<'a>(
 ///   * the program was neither a path nor a valid program
 ///   * the repl context failed
 ///
-fn cmd_repl(mode: io::Mode) -> Result<(), Error> {
+fn cmd_repl(mode: io::Mode) -> eyre::Result<()> {
     if !*io::IS_FULL_TTY {
-        return Err(Error::User("cannot start repl in a non-tty env".to_owned()));
+        eyre::bail!(Error::User("cannot start repl in a non-tty env".to_owned()));
     }
 
     let mut io = Io::new(mode).log("[".to_owned(), "]: ".to_owned());
@@ -258,7 +258,7 @@ fn cmd_repl(mode: io::Mode) -> Result<(), Error> {
 ///   * the program was neither a path nor a valid program
 ///   * the repl context failed
 ///
-fn cmd_completions(mode: io::Mode, shell: Option<&str>, path: Option<&str>) -> Result<(), Error> {
+fn cmd_completions(mode: io::Mode, shell: Option<&str>, path: Option<&str>) -> eyre::Result<()> {
     let mut io = Io::new(mode).log("[".to_owned(), "]: ".to_owned());
 
     let shell = if let Some(shell) = shell {
@@ -284,7 +284,7 @@ fn cmd_completions(mode: io::Mode, shell: Option<&str>, path: Option<&str>) -> R
         "fish" | "/bin/fish" => Some(Shell::Fish),
         "pwsh" | "/bin/pwsh" => Some(Shell::PowerShell),
         "zsh" | "/bin/zsh" => Some(Shell::Zsh),
-        _ => return Err(Error::User(format!("unknown shell: '{}'", shell))),
+        _ => eyre::bail!(Error::User(format!("unknown shell: '{}'", shell))),
     };
 
     let path = if let Some(path) = path {

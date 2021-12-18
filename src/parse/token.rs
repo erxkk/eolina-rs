@@ -190,11 +190,11 @@ impl<'p> Display for Token<'p> {
 /// * [`Err(error)`] if unable to parse a token
 ///   * `error` contains the [`Error`]
 ///
-pub fn next_token(input: &str) -> Result<(&str, Token, usize), Error> {
+pub fn next_token(input: &str) -> eyre::Result<(&str, Token, usize)> {
     // ignore whitespace, treat whitespace as empty
     let trimmed = input.trim_start_matches(|ch: char| ch.is_ascii_whitespace());
     if trimmed.is_empty() {
-        return Err(Error::Empty);
+        eyre::bail!(Error::Empty);
     }
 
     let tirmlen = input.len() - trimmed.len();
@@ -345,7 +345,7 @@ pub fn next_token(input: &str) -> Result<(&str, Token, usize), Error> {
         ));
     }
 
-    Err(Error::Unknown(input.to_owned()))
+    eyre::bail!(Error::Unknown(input.to_owned()));
 }
 
 #[cfg(test)]
