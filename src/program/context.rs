@@ -166,15 +166,21 @@ where
         Ok(())
     }
 
-    // TODO: doc
     ///
+    /// Consumes this [`Context`] and attempts executed it to completion.
     ///
+    /// ### Returns
+    ///
+    /// * [`Ok`]
+    ///   * the context was successfully executed
+    /// * [`Err`]
+    ///   * the context was not successfully executed
     ///
     pub fn run(mut self) -> eyre::Result<()> {
         loop {
             match Pin::new(&mut self).resume(()) {
                 GeneratorState::Yielded(_) => continue,
-                GeneratorState::Complete(res) => break res.map_err(|err| err.into()),
+                GeneratorState::Complete(res) => break res,
             }
         }
     }
@@ -211,9 +217,7 @@ where
                 }
                 Err(inner) => GeneratorState::Complete(Err(inner)),
             },
-            GeneratorState::Complete(inner) => {
-                GeneratorState::Complete(inner.map_err(|err| err.into()))
-            }
+            GeneratorState::Complete(inner) => GeneratorState::Complete(inner),
         }
     }
 }
