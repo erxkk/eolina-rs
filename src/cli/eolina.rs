@@ -116,7 +116,7 @@ original and my implementation.",
                 matches
                     .value_of("color")
                     .expect("color has a defautl value"),
-                atty::is(atty::Stream::Stdout) && atty::is(atty::Stream::Stdin),
+                *io::IS_FULL_TTY,
             ) {
                 ("on" | "auto", true) => io::Mode::Colorful,
                 ("on", false) => {
@@ -228,7 +228,7 @@ fn cmd_eval<'a>(
 ///   * the repl context failed
 ///
 fn cmd_repl(mode: io::Mode) -> Result<(), Error> {
-    if atty::isnt(atty::Stream::Stdout) || atty::isnt(atty::Stream::Stdin) {
+    if !*io::IS_FULL_TTY {
         return Err(Error::User("cannot start repl in a non-tty env".to_owned()));
     }
 

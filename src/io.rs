@@ -2,7 +2,17 @@ use crossterm::style::Stylize;
 use std::{
     fmt::Display,
     io::{self, Stderr, Stdin, Stdout, Write},
+    lazy::SyncLazy,
 };
+
+// TODO: post v1: rework `Io` be be less of a cluster fuck
+//       rework overall handling of input and output
+
+pub static IS_FULL_TTY: SyncLazy<bool> = SyncLazy::new(|| {
+    atty::is(atty::Stream::Stdout)
+        && atty::is(atty::Stream::Stdin)
+        && atty::is(atty::Stream::Stderr)
+});
 
 ///
 /// An IO-Abstraction that allows for simple prompted and colorful
