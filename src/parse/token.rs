@@ -418,15 +418,15 @@ mod test {
         );
         assert_eq!(
             next_token("|.42|").unwrap(),
-            ("", Token::Slice((..42).into()), 5)
+            ("", Token::Slice((..42usize).into()), 5)
         );
         assert_eq!(
             next_token("|42.|").unwrap(),
-            ("", Token::Slice((42..).into()), 5)
+            ("", Token::Slice((42usize..).into()), 5)
         );
         assert_eq!(
             next_token("|42.42|").unwrap(),
-            ("", Token::Slice((42..42).into()), 7)
+            ("", Token::Slice((42..42usize).into()), 7)
         );
     }
 
@@ -434,15 +434,15 @@ mod test {
     fn slice_neg() {
         assert_eq!(
             next_token("|.-42|").unwrap(),
-            ("", Token::Slice((..-42).into()), 6)
+            ("", Token::Slice((..-42isize).into()), 6)
         );
         assert_eq!(
             next_token("|-42.|").unwrap(),
-            ("", Token::Slice((-42..).into()), 6)
+            ("", Token::Slice((-42isize..).into()), 6)
         );
         assert_eq!(
             next_token("|-42.-42|").unwrap(),
-            ("", Token::Slice((-42..-42).into()), 9)
+            ("", Token::Slice((-42..-42isize).into()), 9)
         );
     }
 

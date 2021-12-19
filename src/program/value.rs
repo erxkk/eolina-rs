@@ -68,7 +68,8 @@ impl Value {
 impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::String(inner) => Display::fmt(inner, f),
+            // use debug version to show explicit delimiters
+            Self::String(inner) => Debug::fmt(inner, f),
             Self::StringVec(inner) => Debug::fmt(inner, f),
             Self::Bool(inner) => Display::fmt(inner, f),
         }
