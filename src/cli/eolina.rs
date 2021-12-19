@@ -68,7 +68,13 @@ pub struct Eolina {
     color: Color,
 
     ///
-    /// Whether or not there should be any log messages
+    /// Show trace information on errors [-t, -tt, -ttt]
+    ///
+    #[clap(short, long, parse(from_occurrences))]
+    trace: usize,
+
+    ///
+    /// Hide any log messages
     ///
     #[clap(short, long)]
     quiet: bool,
@@ -76,7 +82,7 @@ pub struct Eolina {
     ///
     /// A program or path to a file containing a program
     ///
-    #[clap(value_name = "PROGRAM|PATH", help = "")]
+    #[clap(value_name = "PROGRAM|PATH")]
     program: Option<String>,
 
     ///
@@ -116,6 +122,20 @@ impl Eolina {
     ///   * an exec/repl context failed
     ///
     pub fn run(self) -> eyre::Result<()> {
+        match self.trace {
+            1 => {
+                std::env::set_var("RUST_BACKTRACE", "1");
+            }
+            2 => {
+                std::env::set_var("RUST_BACKTRACE", "full");
+            }
+            3.. => {
+                std::env::set_var("RUST_BACKTRACE", "full");
+                std::env::set_var("COLORBT_SHOW_HIDDEN", "1");
+            }
+            _ => {}
+        }
+
         let mode = if self.quiet {
             io::Mode::Muted
         } else {
