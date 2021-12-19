@@ -1,11 +1,34 @@
 use super::Error;
 use crate::{
     io::{self, Io},
-    parse::LazyGen,
+    parse::EagerGen,
     program, repl,
 };
 use clap::{ArgEnum, IntoApp, Parser, Subcommand};
 use std::{collections::VecDeque, fmt::Display, fs, io::Read, str::FromStr};
+
+///
+/// An exit code for handling errors that should not be bubbled up
+/// to a top-level panic.
+///
+#[derive(Debug)]
+#[repr(u8)]
+pub enum ExitCode {
+    ///
+    /// No error.
+    ///
+    Ok = 0,
+
+    ///
+    /// Neither a subcommand nor arguments were supplied.
+    ///
+    MissingArgumentOrSubcommand = 1,
+
+    ///
+    /// Invalid program was supplied.
+    ///
+    InvlidProgram = 2,
+}
 
 ///
 /// The color mode the app should use.
@@ -56,7 +79,15 @@ impl FromStr for Color {
 /// Encapsualtes the whole command line application.
 ///
 #[derive(Parser, Debug)]
-#[clap(about, version, author)]
+#[clap(
+    about,
+    version,
+    author,
+    after_help = "EXIT CODE:
+    0    Ok
+    1    Missing Argument/Subcommand
+    2    Invlid Program"
+)]
 pub struct Eolina {
     ///
     /// Whether or not to use colored output
@@ -116,12 +147,12 @@ impl Eolina {
     /// ### Returns
     ///
     /// * [`Ok`]
-    ///   * the program was run successfully
+    ///   * the program was run successfully, contains the exit code
     /// * [`Err`]
     ///   * the program arguments are invalid
     ///   * an exec/repl context failed
     ///
-    pub fn run(self) -> eyre::Result<()> {
+    pub fn run(self) -> eyre::Result<ExitCode> {
         match self.trace {
             1 => {
                 std::env::set_var("RUST_BACKTRACE", "1");
@@ -158,7 +189,7 @@ impl Eolina {
                 } else {
                     let mut app = Self::into_app();
                     app.print_help()?;
-                    Ok(())
+                    Ok(ExitCode::MissingArgumentOrSubcommand)
                 }
             }
         }
@@ -174,14 +205,14 @@ impl Eolina {
 /// ### Returns
 ///
 /// * [`Ok`]
-///   * the exec was run succesfully
+///   * the exec was run succesfully, contains the exit code
 /// * [`Err`]
 ///   * the program was was a file path but an error occured opening the file
 ///   * the program file could not be read
 ///   * the program was neither a path nor a valid program
 ///   * the program context failed
 ///
-fn cmd_eval(mode: io::Mode, program: String, inputs: Vec<String>) -> eyre::Result<()> {
+fn cmd_eval(mode: io::Mode, program: String, inputs: Vec<String>) -> eyre::Result<ExitCode> {
     let mut queue = VecDeque::new();
     let mut file_contents = String::new();
 
@@ -214,13 +245,21 @@ fn cmd_eval(mode: io::Mode, program: String, inputs: Vec<String>) -> eyre::Resul
         io = io.attach(inputs.into_iter().rev().collect());
     }
 
+    let gen = match EagerGen::new(&input) {
+        Ok(gen) => gen,
+        Err(err) => {
+            io.write_expect(io::Kind::Error, None, err);
+            return Ok(ExitCode::InvlidProgram);
+        }
+    };
+
     // create an executor context
-    let context = program::Context::new(&input, LazyGen::new(&input).eager()?, &mut io, &mut queue);
+    let context = program::Context::new(&input, gen, &mut io, &mut queue);
 
     // execute it
     context.run()?;
 
-    Ok(())
+    Ok(ExitCode::Ok)
 }
 
 ///
@@ -231,14 +270,14 @@ fn cmd_eval(mode: io::Mode, program: String, inputs: Vec<String>) -> eyre::Resul
 /// ### Returns
 ///
 /// * [`Ok`]
-///   * the repl was exited normally
+///   * the repl was exited normally, contains the exit code
 /// * [`Err`]
 ///   * the program was was a file path but an error occured opening the file
 ///   * the program file could not be read
 ///   * the program was neither a path nor a valid program
 ///   * the repl context failed
 ///
-fn cmd_repl(mode: io::Mode) -> eyre::Result<()> {
+fn cmd_repl(mode: io::Mode) -> eyre::Result<ExitCode> {
     if !*io::IS_FULL_TTY {
         eyre::bail!(Error::User("cannot start repl in a non-tty env".to_owned()));
     }
@@ -253,5 +292,5 @@ fn cmd_repl(mode: io::Mode) -> eyre::Result<()> {
 
     context.run()?;
 
-    Ok(())
+    Ok(ExitCode::Ok)
 }

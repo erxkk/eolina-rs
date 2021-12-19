@@ -3,7 +3,7 @@ use crate::{
     helper,
     io::Io,
     io::Kind,
-    parse::LazyGen,
+    parse::EagerGen,
     program::{Context as ProgramContext, Value},
 };
 use std::{collections::VecDeque, ops::Generator, pin::Pin};
@@ -69,7 +69,7 @@ impl<'a> Context<'a> {
                 continue 'outer;
             }
 
-            let gen = match LazyGen::new(&input).eager() {
+            let gen = match EagerGen::new(&input) {
                 Ok(gen) => gen,
                 Err(err) => {
                     self.io.write_expect(Kind::Error, None, err);
