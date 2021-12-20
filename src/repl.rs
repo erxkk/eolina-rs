@@ -178,13 +178,14 @@ impl Context {
                     "    ^    1:1       check all ascii upper",
                     "Transforms:",
                     "    .    1:1       join array elements to string",
-                    "|x.y|    1:1       slices by abs or rel indecies like [x..y]",
+                    "|x.y|    1:1       slices by abs or rel indecies",
+                    "  |x|    1:1       indexes by abs or rel index",
                     "  [x]    1:1       filter all by x: Checks",
                     "  {x}    1:1       map all by x: Maps",
                     "Maps:",
                     "    _    ---       to ascii lower case",
                     "    ^    ---       to ascii upper case",
-                    "    s    ---       to swaped ascii case",
+                    "    %    ---       to swaped ascii case",
                 ];
 
                 for token in tokens {

@@ -2,6 +2,7 @@ mod ascii;
 pub use ascii::AsciiExt;
 
 mod range;
+pub use range::EolinaIndex;
 pub use range::EolinaRange;
-pub use range::EolinaRangeBound;
-pub use range::Error as RangeError;
+pub use range::IndexError;
+pub use range::RangeError;

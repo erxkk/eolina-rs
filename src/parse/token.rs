@@ -1,4 +1,4 @@
-use crate::helper::EolinaRange;
+use crate::helper::{EolinaIndex, EolinaRange};
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_till},
@@ -149,6 +149,11 @@ pub enum Token<'p> {
     Filter(Check),
 
     ///
+    /// The index token `|x|` where `x` is a [`isize`].
+    ///
+    Index(EolinaIndex),
+
+    ///
     /// The slice token `|x.x|` where `x` are empty or [`isize`].
     ///
     Slice(EolinaRange),
@@ -173,6 +178,7 @@ impl<'p> Display for Token<'p> {
             Self::IsLower => f.write_str("_"),
             Self::Map(map) => map.fmt(f),
             Self::Filter(filter) => filter.fmt(f),
+            Self::Index(idx) => write!(f, "|{}|", idx),
             Self::Slice(range) => range.fmt(f),
         }
     }
@@ -222,6 +228,8 @@ pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token, usize)> {
         tag("/"),
     );
 
+    let mut index = delimited(tag("|"), pair(opt(tag("-")), digit1), tag("|"));
+
     let mut slice = delimited(
         tag("|"),
         separated_pair(
@@ -240,10 +248,13 @@ pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token, usize)> {
 
     let mut map = delimited(tag("{"), alt((tag("_"), tag("^"), tag("%"))), tag("}"));
 
-    type Single<'a> = Result<(&'a str, &'a str), NomErr<NomError<&'a str>>>;
-    type SingleOpt<'a> = Result<(&'a str, Option<&'a str>), NomErr<NomError<&'a str>>>;
-    type Double<'a> = Result<(&'a str, (&'a str, &'a str)), NomErr<NomError<&'a str>>>;
-    type NestedDouble<'a> = Result<
+    type Str<'a> = Result<(&'a str, &'a str), NomErr<NomError<&'a str>>>;
+    type Opt<'a> = Result<(&'a str, Option<&'a str>), NomErr<NomError<&'a str>>>;
+    type OptStr<'a> = Result<(&'a str, (Option<&'a str>, &'a str)), NomErr<NomError<&'a str>>>;
+    type StrStr<'a> = Result<(&'a str, (&'a str, &'a str)), NomErr<NomError<&'a str>>>;
+
+    // this can surely be done better
+    type OptOpt<'a> = Result<
         (
             &'a str,
             (
@@ -254,7 +265,7 @@ pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token, usize)> {
         NomErr<NomError<&'a str>>,
     >;
 
-    let single_res: Single = alt(single)(trimmed);
+    let single_res: Str = alt(single)(trimmed);
     if let Ok((rest, parsed)) = single_res {
         return Ok((
             rest,
@@ -274,7 +285,7 @@ pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token, usize)> {
         ));
     }
 
-    let double_res: Double = alt(double)(trimmed);
+    let double_res: StrStr = alt(double)(trimmed);
     if let Ok((rest, (_, second))) = double_res {
         return Ok((
             rest,
@@ -283,7 +294,19 @@ pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token, usize)> {
         ));
     }
 
-    let split_res: SingleOpt = split(trimmed);
+    let index_res: OptStr = index(trimmed);
+    if let Ok((rest, (sign, num))) = index_res {
+        return Ok((
+            rest,
+            Token::Index(EolinaIndex::from_components(
+                sign.is_some(),
+                num.parse().expect("combinator must not fail"),
+            )),
+            tirmlen + 2 + num.len(),
+        ));
+    }
+
+    let split_res: Opt = split(trimmed);
     if let Ok((rest, optional)) = split_res {
         return Ok((
             rest,
@@ -292,7 +315,7 @@ pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token, usize)> {
         ));
     }
 
-    let map_res: Single = map(trimmed);
+    let map_res: Str = map(trimmed);
     if let Ok((rest, parsed)) = map_res {
         return Ok((
             rest,
@@ -306,7 +329,7 @@ pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token, usize)> {
         ));
     }
 
-    let filter_res: Single = filter(trimmed);
+    let filter_res: Str = filter(trimmed);
     if let Ok((rest, parsed)) = filter_res {
         return Ok((
             rest,
@@ -321,7 +344,7 @@ pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token, usize)> {
         ));
     }
 
-    let slice_res: NestedDouble = slice(trimmed);
+    let slice_res: OptOpt = slice(trimmed);
     if let Ok((rest, (first, second))) = slice_res {
         let parser = |(sign, num): (Option<&str>, &str)| {
             (
@@ -412,7 +435,19 @@ mod test {
     }
 
     #[test]
-    fn slice_pos() {
+    fn index() {
+        assert_eq!(
+            next_token("|42|").unwrap(),
+            ("", Token::Index((42isize).into()), 4)
+        );
+        assert_eq!(
+            next_token("|-42|").unwrap(),
+            ("", Token::Index((-42isize).into()), 4)
+        );
+    }
+
+    #[test]
+    fn slice() {
         assert_eq!(
             next_token("|.|").unwrap(),
             ("", Token::Slice((..).into()), 3)
@@ -422,28 +457,12 @@ mod test {
             ("", Token::Slice((..42usize).into()), 5)
         );
         assert_eq!(
-            next_token("|42.|").unwrap(),
-            ("", Token::Slice((42usize..).into()), 5)
-        );
-        assert_eq!(
-            next_token("|42.42|").unwrap(),
-            ("", Token::Slice((42..42usize).into()), 7)
-        );
-    }
-
-    #[test]
-    fn slice_neg() {
-        assert_eq!(
-            next_token("|.-42|").unwrap(),
-            ("", Token::Slice((..-42isize).into()), 6)
-        );
-        assert_eq!(
             next_token("|-42.|").unwrap(),
             ("", Token::Slice((-42isize..).into()), 6)
         );
         assert_eq!(
-            next_token("|-42.-42|").unwrap(),
-            ("", Token::Slice((-42..-42isize).into()), 9)
+            next_token("|42.-42|").unwrap(),
+            ("", Token::Slice((42..-42isize).into()), 8)
         );
     }
 

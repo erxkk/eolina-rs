@@ -258,6 +258,11 @@ impl<'p, 'v, G> Context<'p, 'v, G> {
                 let ret = func::filter(val, filter)?;
                 self.push_queue([ret]);
             }
+            Token::Index(idx) => {
+                let [val] = self.pop_queue()?;
+                let ret = func::index(val, idx)?;
+                self.push_queue([ret]);
+            }
             Token::Slice(range) => {
                 let [val] = self.pop_queue()?;
                 let ret = func::slice(val, range)?;

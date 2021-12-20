@@ -1,5 +1,5 @@
 use super::{ArgMismatchError, Error, Kind, Value};
-use crate::helper::{AsciiExt, EolinaRange};
+use crate::helper::{AsciiExt, EolinaIndex, EolinaRange};
 use crate::parse::{CheckToken, MapToken};
 
 ///
@@ -268,6 +268,45 @@ fn __filter<T: AsciiExt>(val: &T, check: CheckToken) -> bool {
 }
 
 ///
+/// Extracts the element at the given `index`.
+///
+/// ### Accepts
+///
+/// * [`Kind::String`]
+/// * [`Kind::StringVec`]
+///
+/// ### Returns
+///
+/// * [`Ok(Value::String(string))`]
+///   * `string` contains the element at the given index
+/// * [`Err(error)`]
+///   * `error` contains an arg type mismatch [`Error`]
+///
+pub fn index(input: Value, index: EolinaIndex) -> Result<Value, Error> {
+    let len = match &input {
+        Value::String(inner) => Ok(inner.len()),
+        Value::StringVec(inner) => Ok(inner.len()),
+        x => Err(Error::ArgMismatch(ArgMismatchError::new(
+            &[Kind::String, Kind::StringVec],
+            x.kind(),
+        ))),
+    }?;
+
+    let index = index.as_usize(len)?;
+
+    match input {
+        Value::String(string) => Ok(Value::String(
+            String::from_utf8_lossy(&string.as_bytes()[index..=index]).into_owned(),
+        )),
+        Value::StringVec(vec) => Ok(Value::String(vec[index].to_owned())),
+        x => Err(Error::ArgMismatch(ArgMismatchError::new(
+            &[Kind::String, Kind::StringVec],
+            x.kind(),
+        ))),
+    }
+}
+
+///
 /// Slices the given input at the lower and upper bounds.
 ///
 /// ### Accepts
@@ -287,7 +326,7 @@ pub fn slice(input: Value, range: EolinaRange) -> Result<Value, Error> {
         Value::String(inner) => Ok(inner.len()),
         Value::StringVec(inner) => Ok(inner.len()),
         x => Err(Error::ArgMismatch(ArgMismatchError::new(
-            &[Kind::String],
+            &[Kind::String, Kind::StringVec],
             x.kind(),
         ))),
     }?;
@@ -440,6 +479,52 @@ mod test {
             Value::StringVec(vec!["abc".to_owned()])
         );
         assert!(super::filter(Value::Bool(true), CheckToken::Vowel).is_err());
+    }
+
+    #[test]
+    fn index_pos() {
+        assert_eq!(
+            super::index(Value::String("abcdefg".to_owned()), 3isize.into()).unwrap(),
+            Value::String("d".to_owned())
+        );
+        assert_eq!(
+            super::index(
+                Value::StringVec(vec![
+                    "abcdef".to_owned(),
+                    "ghijkl".to_owned(),
+                    "mnopqr".to_owned(),
+                    "stuvwx".to_owned(),
+                ]),
+                3isize.into()
+            )
+            .unwrap(),
+            Value::String("stuvwx".to_owned())
+        );
+
+        assert!(super::index(Value::String("abcdefg".to_owned()), (8usize).into()).is_err());
+    }
+
+    #[test]
+    fn index_neg() {
+        assert_eq!(
+            super::index(Value::String("abcdefg".to_owned()), (-3isize).into()).unwrap(),
+            Value::String("e".to_owned())
+        );
+        assert_eq!(
+            super::index(
+                Value::StringVec(vec![
+                    "abcdef".to_owned(),
+                    "ghijkl".to_owned(),
+                    "mnopqr".to_owned(),
+                    "stuvwx".to_owned(),
+                ]),
+                (-3isize).into()
+            )
+            .unwrap(),
+            Value::String("ghijkl".to_owned())
+        );
+
+        assert!(super::index(Value::String("abcdefg".to_owned()), (-8isize).into()).is_err());
     }
 
     #[test]

@@ -7,6 +7,12 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     ///
+    /// A relative index resulted in an invalid target index range.
+    ///
+    #[error("index error")]
+    Index(#[from] crate::helper::IndexError),
+
+    ///
     /// A relative range resulted in an invalid target slice range.
     ///
     #[error("range error")]
