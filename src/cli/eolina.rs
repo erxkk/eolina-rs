@@ -9,8 +9,8 @@ use std::{
 };
 
 ///
-/// An exit code for handling errors that should not be bubbled up
-/// to a top-level panic. Runetime errors are handled by panics and return 1.
+/// An exit code for handling errors that should not be bubbled up to a top-level panic. Runetime
+/// errors are handled by panics and return 1.
 ///
 #[derive(Debug)]
 #[repr(u8)]
@@ -21,9 +21,8 @@ pub enum ExitCode {
     Ok = 0,
 
     ///
-    /// A runtime error occured, this variant is listed for completeness.
-    /// Runtime errors are bubbled up with eyre and displayed through a
-    /// top-level panic, which returns error code 1.
+    /// A runtime error occured, this variant is listed for completeness. Runtime errors are
+    /// bubbled up with eyre and displayed through a top-level panic, which returns error code 1.
     ///
     #[allow(dead_code)]
     RuntimeFailure = 1,
@@ -78,6 +77,8 @@ impl FromStr for Color {
         }
     }
 }
+
+// Note: Documentation is left without trailing periods `.` as it is used in clap's help message.
 
 ///
 /// Encapsualtes the whole command line application.
@@ -229,8 +230,8 @@ impl Eolina {
 }
 
 ///
-/// Executes the default command, which takes a program and optional inputs.
-/// If no inputs are given they are read form stdin during execution.
+/// Executes the default command, which takes a program and optional inputs. If no inputs are given
+/// they are read form stdin during execution.
 ///
 /// **Note**: Program errors **are** propagated.
 ///

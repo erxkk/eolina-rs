@@ -19,13 +19,24 @@ pub trait Gen<'t>: Generator<Yield = (Token<'t>, usize), Return = eyre::Result<(
 }
 
 ///
-/// A lazily evaluated token [`Gen`], will yield until the generator is
-/// complete or encounters an invalid [`Token`].
+/// A lazily evaluated token [`Gen`], will yield until the generator is complete or
+/// encounters an invalid [`Token`].
 ///
 #[derive(Debug)]
 pub struct LazyGen<'t> {
+    ///
+    /// The program this token is yielding tokens from.
+    ///
     program: &'t str,
-    current: &'t str,
+
+    ///
+    /// The remainting slice of tokens to yield.
+    ///
+    remaining: &'t str,
+
+    ///
+    /// Whether or not this generator completed, this is set to true after remaining is "".
+    ///
     completed: bool,
 }
 
@@ -36,7 +47,7 @@ impl<'t> LazyGen<'t> {
     pub fn new(input: &'t str) -> Self {
         Self {
             program: input,
-            current: input,
+            remaining: input,
             completed: false,
         }
     }
@@ -51,13 +62,13 @@ impl<'t> Generator for LazyGen<'t> {
 
         if this.completed {
             panic!("resumed genarator after completion wihtout reset");
-        } else if this.current.is_empty() {
+        } else if this.remaining.is_empty() {
             this.completed = true;
             GeneratorState::Complete(Ok(()))
         } else {
-            match next_token(this.current) {
+            match next_token(this.remaining) {
                 Ok((rest, token, size)) => {
-                    this.current = rest.trim_matches(|ch: char| ch.is_ascii_whitespace());
+                    this.remaining = rest.trim_matches(|ch: char| ch.is_ascii_whitespace());
                     GeneratorState::Yielded((token, size))
                 }
                 Err(err) => GeneratorState::Complete(Err(err)),
@@ -72,13 +83,13 @@ impl<'t> Gen<'t> for LazyGen<'t> {
     }
 
     fn reset(&mut self) {
-        self.current = self.program;
+        self.remaining = self.program;
     }
 }
 
 ///
-/// An eagerly collected token [`Gen`], if this generator is created succesfully,
-/// it will always complete with [`Ok`].
+/// An eagerly collected token [`Gen`], if this generator is created succesfully, it will always
+/// complete with [`Ok`].
 ///
 #[derive(Debug)]
 pub struct EagerGen<'t> {

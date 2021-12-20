@@ -22,20 +22,28 @@ pub static IS_ERR_TTY: SyncLazy<bool> = SyncLazy::new(|| atty::is(atty::Stream::
 ///
 /// The global mutable log leve filter, used to set logging at runtime for repl.
 ///
+/// **DO NOT** keep a lock around while logging, this value is accessed by the log filter.
+///
 pub static LOG_LEVEL_FILTER: SyncLazy<Mutex<log::LevelFilter>> =
     SyncLazy::new(|| Mutex::new(log::LevelFilter::Off));
 
 ///
 /// Whether or not the log output should be colorful.
 ///
+/// **DO NOT** keep a lock around while logging, this value is accessed by the log filter.
+///
 pub static IS_FANCY: SyncLazy<bool> = SyncLazy::new(|| *IS_FANCY_CELL.get_or_init(|| false));
 
 ///
-/// A backing cell used to initialize [`IS_FANCY`] eliminating the need or get_or_init one
+/// A backing cell used to initialize [`IS_FANCY`] eliminating the need for get_or_init on
 /// every get.
 ///
 pub(super) static IS_FANCY_CELL: SyncOnceCell<bool> = SyncOnceCell::new();
 
+///
+/// Get the log prompt depending on the current state of [`IS_FANCY`]. If [`IS_FANCY`] is true,
+/// the prompt will be styled, otherwise not.
+///
 pub fn get_prompt<'a>(level: log::Level) -> <&'a str as Stylize>::Styled {
     match level {
         log::Level::Error => {
@@ -76,6 +84,12 @@ pub fn get_prompt<'a>(level: log::Level) -> <&'a str as Stylize>::Styled {
     }
 }
 
+///
+/// Returns the before and after loglevel if it were adjusted with an increment/decrement.
+///
+/// ### Returns
+/// * `(before, after)`
+///
 pub fn log_level_after_adjust(inc: bool) -> (log::LevelFilter, log::LevelFilter) {
     let lock = LOG_LEVEL_FILTER.lock().expect("mutext not acquired");
     let before = *lock;

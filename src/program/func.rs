@@ -3,8 +3,7 @@ use crate::helper::{AsciiExt, EolinaRange};
 use crate::parse::{CheckToken, MapToken};
 
 ///
-/// Splits the given input into it's [`char`]s if no `split` is given otherwise
-/// splits by `split`.
+/// Splits the given input into it's [`char`]s if no `split` is given otherwise splits by `split`.
 ///
 /// ### Accepts
 ///
@@ -100,7 +99,8 @@ pub fn concat(input1: Value, input2: Value) -> Result<Value, Error> {
 }
 
 ///
-/// Returns whether or not each element in the given input is a consonant or contains itself only consonants.
+/// Returns whether or not each element in the given input is a consonant or contains itself only
+/// consonants.
 ///
 /// ### Accepts
 ///
@@ -119,7 +119,8 @@ pub fn is_conso(input: Value) -> Result<Value, Error> {
 }
 
 ///
-/// Returns whether or not each element in the given input is a consonant or contains itself only vowel.
+/// Returns whether or not each element in the given input is a consonant or contains itself only
+/// vowel.
 ///
 /// ### Accepts
 ///

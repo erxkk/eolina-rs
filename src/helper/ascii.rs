@@ -1,6 +1,5 @@
 ///
-/// An extension trait for checking checking ascii chars for specific
-/// properties.
+/// An extension trait for checking checking ascii chars for specific properties.
 ///
 pub trait AsciiExt {
     ///
