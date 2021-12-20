@@ -165,12 +165,14 @@ impl<'p, 'v, G> Context<'p, 'v, G> {
         match token {
             Token::In => {
                 let prompt = |this: &mut Self| -> io::Result<()> {
-                    if *cli::IS_FANCY {
-                        eprint!("[{}] [{}]: ", "inp".green(), this.get_context())
-                    } else {
-                        eprint!("[inp] [{}]: ", this.get_context())
+                    if this.is_repl {
+                        if *cli::IS_FANCY {
+                            eprint!("[{}] [{}]: ", "inp".green(), this.get_context())
+                        } else {
+                            eprint!("[inp] [{}]: ", this.get_context())
+                        }
+                        io::stdout().flush()?;
                     }
-                    io::stdout().flush()?;
                     Ok(())
                 };
 
