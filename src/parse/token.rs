@@ -189,11 +189,11 @@ impl<'p> Display for Token<'p> {
 /// * [`Err`]
 ///   * unable to parse a token, contains the [`Error`]
 ///
-pub fn next_token(input: &str) -> eyre::Result<(&str, Token, usize)> {
+pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token, usize)> {
     // ignore whitespace, treat whitespace as empty
     let trimmed = input.trim_start_matches(|ch: char| ch.is_ascii_whitespace());
     if trimmed.is_empty() {
-        eyre::bail!("the given program was empty");
+        color_eyre::eyre::bail!("the given program was empty");
     }
 
     let tirmlen = input.len() - trimmed.len();
@@ -346,7 +346,7 @@ pub fn next_token(input: &str) -> eyre::Result<(&str, Token, usize)> {
         ));
     }
 
-    eyre::bail!(format!("unknown token at '{}'", input));
+    color_eyre::eyre::bail!(format!("unknown token at '{}'", input));
 }
 
 #[cfg(test)]

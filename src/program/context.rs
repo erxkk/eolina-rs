@@ -164,7 +164,7 @@ impl<'p, 'v, G> Context<'p, 'v, G> {
     ///   * the function was not successfully executed
     ///   * an IO operation failed
     ///
-    fn exec_token(&mut self, token: Token) -> eyre::Result<()> {
+    fn exec_token(&mut self, token: Token) -> color_eyre::Result<()> {
         match token {
             Token::In => {
                 let prompt = |this: &mut Self| -> io::Result<()> {
@@ -285,7 +285,7 @@ where
     /// * [`Err`]
     ///   * the context was not successfully executed
     ///
-    pub fn run(mut self) -> eyre::Result<()> {
+    pub fn run(mut self) -> color_eyre::Result<()> {
         loop {
             match Pin::new(&mut self).resume(()) {
                 GeneratorState::Yielded(_) => continue,
@@ -300,7 +300,7 @@ where
     G: Gen<'p> + Unpin,
 {
     type Yield = ();
-    type Return = eyre::Result<()>;
+    type Return = color_eyre::Result<()>;
 
     ///
     /// Attempts to parse and execute the next instruction.

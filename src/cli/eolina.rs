@@ -163,7 +163,7 @@ impl Eolina {
     ///   * the program arguments are invalid
     ///   * an exec/repl context failed
     ///
-    pub fn run(self) -> eyre::Result<ExitCode> {
+    pub fn run(self) -> color_eyre::Result<ExitCode> {
         match self.trace {
             1 => {
                 std::env::set_var("RUST_BACKTRACE", "1");
@@ -193,7 +193,7 @@ impl Eolina {
         let is_fancy = match (self.color, *super::IS_ERR_TTY) {
             (Color::On | Color::Auto, true) => true,
             (Color::On, false) => {
-                eyre::bail!("`color=on` is not allowed if stderr is not tty".to_owned());
+                color_eyre::eyre::bail!("`color=on` is not allowed if stderr is not tty".to_owned());
             }
             (Color::Auto, false) | (Color::Off, _) => false,
         };
@@ -245,7 +245,7 @@ impl Eolina {
 ///   * the program was neither a path nor a valid program
 ///   * the program context failed
 ///
-fn cmd_eval(program: String, mut inputs: Vec<String>) -> eyre::Result<ExitCode> {
+fn cmd_eval(program: String, mut inputs: Vec<String>) -> color_eyre::Result<ExitCode> {
     let mut queue = VecDeque::new();
     let mut file_contents = String::new();
 
@@ -260,7 +260,7 @@ fn cmd_eval(program: String, mut inputs: Vec<String>) -> eyre::Result<ExitCode> 
             Err(err) => {
                 // failed beacuse of any other error than file not found
                 if err.kind() != io::ErrorKind::NotFound {
-                    eyre::bail!(err);
+                    color_eyre::eyre::bail!(err);
                 }
 
                 // try using the input directly
@@ -304,9 +304,9 @@ fn cmd_eval(program: String, mut inputs: Vec<String>) -> eyre::Result<ExitCode> 
 ///   * the program was neither a path nor a valid program
 ///   * the repl context failed
 ///
-fn cmd_repl() -> eyre::Result<ExitCode> {
+fn cmd_repl() -> color_eyre::Result<ExitCode> {
     if !*super::IS_IN_TTY || !*super::IS_OUT_TTY || !*super::IS_ERR_TTY {
-        eyre::bail!("cannot start repl in a non-tty env".to_owned());
+        color_eyre::eyre::bail!("cannot start repl in a non-tty env".to_owned());
     }
 
     let mut context = repl::Context::new();

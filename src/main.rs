@@ -9,7 +9,7 @@ mod repl;
 use clap::Parser;
 use cli::ExitCode;
 
-fn main() -> eyre::Result<()> {
+fn main() -> color_eyre::Result<()> {
     // TODO: post v1: program analysis and fancy parsing error reporting via miette
     // TODO: post v1: use raw terminal to allow reply history?
 

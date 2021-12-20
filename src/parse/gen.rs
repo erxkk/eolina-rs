@@ -8,7 +8,7 @@ use std::{
 ///
 /// A **reusable** token generator.
 ///
-pub trait Gen<'t>: Generator<Yield = (Token<'t>, usize), Return = eyre::Result<()>> {
+pub trait Gen<'t>: Generator<Yield = (Token<'t>, usize), Return = color_eyre::Result<()>> {
     ///
     /// Returns this [`Gen`]'s token slice.
     ///
@@ -55,7 +55,7 @@ impl<'t> LazyGen<'t> {
 
 impl<'t> Generator for LazyGen<'t> {
     type Yield = (Token<'t>, usize);
-    type Return = eyre::Result<()>;
+    type Return = color_eyre::Result<()>;
 
     fn resume(self: Pin<&mut Self>, _arg: ()) -> GeneratorState<Self::Yield, Self::Return> {
         let this = Pin::into_inner(self);
@@ -102,7 +102,7 @@ impl<'a> EagerGen<'a> {
     ///
     /// Attempts creating a new [`EagerGen`] for the given `input` string.
     ///
-    pub fn new(input: &'a str) -> eyre::Result<Self> {
+    pub fn new(input: &'a str) -> color_eyre::Result<Self> {
         let mut lazy = LazyGen::new(input);
         let mut tokens = vec![];
 
@@ -126,7 +126,7 @@ impl<'a> EagerGen<'a> {
 
 impl<'t> Generator for EagerGen<'t> {
     type Yield = (Token<'t>, usize);
-    type Return = eyre::Result<()>;
+    type Return = color_eyre::Result<()>;
 
     fn resume(self: Pin<&mut Self>, _arg: ()) -> GeneratorState<Self::Yield, Self::Return> {
         let this = Pin::into_inner(self);

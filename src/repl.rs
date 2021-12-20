@@ -39,7 +39,7 @@ impl Context {
     /// * [`Err`]
     ///   * the [`Context`] was not successful run
     ///
-    pub fn run(&mut self) -> eyre::Result<()> {
+    pub fn run(&mut self) -> color_eyre::Result<()> {
         'outer: loop {
             print!(">>> ");
             io::stdout().flush()?;
@@ -107,7 +107,7 @@ impl Context {
     ///   * the command was not executed successfully contains the
     ///     error reason
     ///
-    fn command(&mut self, cmd: &str) -> eyre::Result<bool> {
+    fn command(&mut self, cmd: &str) -> color_eyre::Result<bool> {
         match cmd {
             "help" | "h" => {
                 // TODO: abstract with box drawing crate
@@ -208,7 +208,7 @@ impl Context {
                 Ok(false)
             }
             "exit" => Ok(true),
-            _ => eyre::bail!(format!("unknown command: '{}'", cmd)),
+            _ => color_eyre::eyre::bail!(format!("unknown command: '{}'", cmd)),
         }
     }
 }
