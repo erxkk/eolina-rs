@@ -105,13 +105,16 @@ impl Context {
     fn command(&mut self, cmd: &str) -> eyre::Result<bool> {
         match cmd {
             "help" | "h" => {
+                // TODO: abstract with box drawing crate
+                // same for tokens + example, add cli commands
                 let commands = [
-                    "h | help       print all commands",
-                    "q | queue      display the current queue",
-                    "c | clear      clear the current queue",
+                    "  h |  help    print all commands",
+                    "  q | queue    display the current queue",
+                    "  c | clear    clear the current queue",
                     "v | v+ | v-    view/increase/decrease logging verbosity",
-                    "example        display examples",
-                    "exit           exit the program",
+                    "     tokens    display all token descriptions",
+                    "    example    display examples",
+                    "       exit    exit the program",
                 ];
 
                 for cmd in commands {
@@ -132,7 +135,7 @@ impl Context {
                 let (before, after) = cli::log_level_after_adjust(&cmd[1..] == "+");
 
                 // we want to display the log change no matter the current or new level
-                // do not keep lock around, log filter accesses logs
+                // do not keep lock around while logging or this will deadlock
                 *cli::LOG_LEVEL_FILTER.lock().expect("mutext not acquired") =
                     log::LevelFilter::Debug;
 
@@ -154,11 +157,43 @@ impl Context {
                 println!("queue: {:?}", self.values);
                 Ok(false)
             }
+            "tokens" => {
+                let tokens = [
+                    "Token    take:push description",
+                    "Basic Tokens:",
+                    "    <    0:1       input",
+                    "    >    1:0       output",
+                    "    ~    2:1       concat",
+                    "    *    1:2       duplicate",
+                    "   @x    x:x       rotate queue x times",
+                    "Checks:",
+                    "    v    1:1       check all ascii vowel",
+                    "    c    1:1       check all ascii consonant",
+                    "    _    1:1       check all ascii lower",
+                    "    ^    1:1       check all ascii upper",
+                    "Transforms:",
+                    "    .    1:1       join array elements to string",
+                    "|x.y|    1:1       slices by abs or rel indecies like [x..y]",
+                    "  [x]    1:1       filter all by x: Checks",
+                    "  {x}    1:1       map all by x: Maps",
+                    "Maps:",
+                    "    _    ---       to ascii lower case",
+                    "    ^    ---       to ascii upper case",
+                    "    s    ---       to swaped ascii case",
+                ];
+
+                for token in tokens {
+                    println!("{}", token);
+                }
+
+                Ok(false)
+            }
             "example" | "eg" => {
                 let examples = [
-                    "<>            echo program",
-                    "<*>>          duplicate echo",
+                    "        <>    echo program",
+                    "      <*>>    duplicate echo",
                     "<*[^][_]~>    orders by case, upper first",
+                    "   <|.-3|>    relative slicing like [..len - 3]",
                 ];
 
                 for eg in examples {
