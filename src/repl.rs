@@ -1,3 +1,5 @@
+use color_eyre::Report;
+
 use crate::{
     cli,
     parse::EagerGen,
@@ -6,7 +8,7 @@ use crate::{
 use std::{
     collections::VecDeque,
     io::{self, Write},
-    ops::Generator,
+    ops::{Generator, GeneratorState},
     pin::Pin,
 };
 
@@ -63,9 +65,7 @@ impl Context {
                             break 'outer Ok(());
                         }
                     }
-                    Err(err) => {
-                        log::error!("{}", err);
-                    }
+                    Err(err) => log_error_chain(err),
                 }
                 continue 'outer;
             }
@@ -73,7 +73,7 @@ impl Context {
             let gen = match EagerGen::new(&input) {
                 Ok(gen) => gen,
                 Err(err) => {
-                    log::error!("{}", err);
+                    log_error_chain(err);
                     continue 'outer;
                 }
             };
@@ -82,11 +82,11 @@ impl Context {
 
             'inner: loop {
                 match Pin::new(&mut program).resume(()) {
-                    std::ops::GeneratorState::Yielded(_) => continue 'inner,
-                    std::ops::GeneratorState::Complete(res) => {
+                    GeneratorState::Yielded(_) => continue 'inner,
+                    GeneratorState::Complete(res) => {
                         match res {
                             Ok(_) => {}
-                            Err(err) => log::error!("{}", err),
+                            Err(err) => log_error_chain(err),
                         }
                         continue 'outer;
                     }
@@ -211,5 +211,14 @@ impl Context {
             "exit" => Ok(true),
             _ => color_eyre::eyre::bail!(format!("unknown command: '{}'", cmd)),
         }
+    }
+}
+
+///
+/// Follows the chain of an error and logs each error subsequently.
+///
+fn log_error_chain(err: Report) {
+    for (idx, err) in err.chain().enumerate() {
+        log::error!("{}: {}", idx, err);
     }
 }
