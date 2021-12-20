@@ -1,15 +1,10 @@
-use super::Error;
-use crate::{
-    io::{self, Io},
-    parse::EagerGen,
-    program, repl,
-};
+use crate::{parse::LazyGen, program, repl};
 use clap::{ArgEnum, IntoApp, Parser, Subcommand};
 use std::{collections::VecDeque, fmt::Display, fs, io::Read, str::FromStr};
 
 ///
 /// An exit code for handling errors that should not be bubbled up
-/// to a top-level panic.
+/// to a top-level panic. Runetime errors are handled by panics and return 1.
 ///
 #[derive(Debug)]
 #[repr(u8)]
@@ -20,14 +15,17 @@ pub enum ExitCode {
     Ok = 0,
 
     ///
-    /// Neither a subcommand nor arguments were supplied.
+    /// A runtime error occured, this variant is listed for completeness.
+    /// Runtime errors are bubbled up with eyre and displayed through a
+    /// top-level panic, which returns error code 1.
     ///
-    MissingArgumentOrSubcommand = 1,
+    #[allow(dead_code)]
+    RuntimeFailure = 1,
 
     ///
-    /// Invalid program was supplied.
+    /// Neither a subcommand nor arguments were supplied.
     ///
-    InvlidProgram = 2,
+    MissingArgumentOrSubcommand = 2,
 }
 
 ///
@@ -85,8 +83,8 @@ impl FromStr for Color {
     author,
     after_help = "EXIT CODE:
     0    Ok
-    1    Missing Argument/Subcommand
-    2    Invlid Program"
+    1    Runtime Error
+    2    Missing Argument/Subcommand"
 )]
 pub struct Eolina {
     ///
@@ -103,6 +101,12 @@ pub struct Eolina {
     ///
     #[clap(short, long, parse(from_occurrences))]
     trace: usize,
+
+    ///
+    /// Log output verbosity [-v, -vv, -vvv]
+    ///
+    #[clap(short, long, parse(from_occurrences))]
+    verbose: usize,
 
     ///
     /// Hide any log messages
@@ -132,7 +136,7 @@ pub struct Eolina {
 ///
 /// A subcommand.
 ///
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, PartialEq, Eq)]
 enum SubCommand {
     ///
     /// Enters an interactive read-eval-print-loop
@@ -167,25 +171,47 @@ impl Eolina {
             _ => {}
         }
 
-        let mode = if self.quiet {
-            io::Mode::Muted
+        *super::LOG_LEVEL_FILTER.lock().expect("mutex not acquired") = if self.quiet {
+            log::LevelFilter::Off
         } else {
-            match (self.color, *io::IS_FULL_TTY) {
-                (Color::On | Color::Auto, true) => io::Mode::Colorful,
-                (Color::On, false) => {
-                    eyre::bail!(Error::User(
-                        "`color=on` is not allowed in non-tty env".to_owned(),
-                    ));
-                }
-                (Color::Auto, false) | (Color::Off, _) => io::Mode::Lean,
+            match (self.verbose, self.subcommand == Some(SubCommand::Repl)) {
+                (0, false) => log::LevelFilter::Warn,
+                (1, false) | (0, true) => log::LevelFilter::Info,
+                (2, false) | (1, true) => log::LevelFilter::Debug,
+                (3.., false) | (2, true) => log::LevelFilter::Trace,
+                _ => log::LevelFilter::Trace,
             }
         };
 
+        let is_fancy = match (self.color, *super::IS_ERR_TTY) {
+            (Color::On | Color::Auto, true) => true,
+            (Color::On, false) => {
+                eyre::bail!("`color=on` is not allowed if stderr is not tty".to_owned());
+            }
+            (Color::Auto, false) | (Color::Off, _) => false,
+        };
+
+        let _ = super::IS_FANCY_CELL.get_or_init(|| is_fancy);
+
+        fern::Dispatch::new()
+            .format(|out, message, record| {
+                out.finish(format_args!(
+                    "[{}] {}",
+                    super::get_prompt(record.level()),
+                    message
+                ))
+            })
+            .filter(|meta| {
+                meta.level() <= *super::LOG_LEVEL_FILTER.lock().expect("mutex not acquired")
+            })
+            .chain(std::io::stderr())
+            .apply()?;
+
         match self.subcommand {
-            Some(SubCommand::Repl) => cmd_repl(mode),
+            Some(SubCommand::Repl) => cmd_repl(),
             None => {
                 if let Some(program) = self.program {
-                    cmd_eval(mode, program, self.inputs)
+                    cmd_eval(program, self.inputs)
                 } else {
                     let mut app = Self::into_app();
                     app.print_help()?;
@@ -212,7 +238,7 @@ impl Eolina {
 ///   * the program was neither a path nor a valid program
 ///   * the program context failed
 ///
-fn cmd_eval(mode: io::Mode, program: String, inputs: Vec<String>) -> eyre::Result<ExitCode> {
+fn cmd_eval(program: String, mut inputs: Vec<String>) -> eyre::Result<ExitCode> {
     let mut queue = VecDeque::new();
     let mut file_contents = String::new();
 
@@ -227,7 +253,7 @@ fn cmd_eval(mode: io::Mode, program: String, inputs: Vec<String>) -> eyre::Resul
             Err(err) => {
                 // failed beacuse of any other error than file not found
                 if err.kind() != std::io::ErrorKind::NotFound {
-                    eyre::bail!(Error::Io(err));
+                    eyre::bail!(err);
                 }
 
                 // try using the input directly
@@ -236,25 +262,20 @@ fn cmd_eval(mode: io::Mode, program: String, inputs: Vec<String>) -> eyre::Resul
         }
     };
 
-    let mut io = Io::new(mode)
-        .io("[".to_owned(), "]: ".to_owned())
-        .log("[".to_owned(), "]: ".to_owned());
-
+    // TODO: in place reverse with swap
     if !inputs.is_empty() {
         // reverse because they are poped back to front
-        io = io.attach(inputs.into_iter().rev().collect());
+        inputs = inputs.into_iter().rev().collect();
     }
 
-    let gen = match EagerGen::new(&input) {
-        Ok(gen) => gen,
-        Err(err) => {
-            io.write_expect(io::Kind::Error, None, err);
-            return Ok(ExitCode::InvlidProgram);
-        }
-    };
-
     // create an executor context
-    let context = program::Context::new(&input, gen, &mut io, &mut queue);
+    let context = program::Context::new(
+        &input,
+        LazyGen::new(&input),
+        Some(inputs),
+        &mut queue,
+        false,
+    );
 
     // execute it
     context.run()?;
@@ -277,19 +298,12 @@ fn cmd_eval(mode: io::Mode, program: String, inputs: Vec<String>) -> eyre::Resul
 ///   * the program was neither a path nor a valid program
 ///   * the repl context failed
 ///
-fn cmd_repl(mode: io::Mode) -> eyre::Result<ExitCode> {
-    if !*io::IS_FULL_TTY {
-        eyre::bail!(Error::User("cannot start repl in a non-tty env".to_owned()));
+fn cmd_repl() -> eyre::Result<ExitCode> {
+    if !*super::IS_IN_TTY || !*super::IS_OUT_TTY || !*super::IS_ERR_TTY {
+        eyre::bail!("cannot start repl in a non-tty env".to_owned());
     }
 
-    let mut io = Io::new(mode).log("[".to_owned(), "]: ".to_owned());
-
-    let mut exec_io = Io::new(mode)
-        .io("[".to_owned(), "]: ".to_owned())
-        .log("[".to_owned(), "]: ".to_owned());
-
-    let mut context = repl::Context::new(&mut io, &mut exec_io);
-
+    let mut context = repl::Context::new();
     context.run()?;
 
     Ok(ExitCode::Ok)

@@ -1,4 +1,3 @@
-use super::Error;
 use crate::helper::EolinaRange;
 use nom::{
     branch::alt,
@@ -161,7 +160,7 @@ impl<'p> Display for Token<'p> {
             Self::In => f.write_str("<"),
             Self::Out => f.write_str(">"),
             Self::Split(split) => match split {
-                Some(string) => write!(f, "/{}/", string),
+                Some(string) => write!(f, "/{:?}/", string),
                 None => f.write_str("//"),
             },
             Self::Join => f.write_str("."),
@@ -184,17 +183,17 @@ impl<'p> Display for Token<'p> {
 ///
 /// ### Returns
 ///
-/// * [`Ok((rest, token))`] if the `input` starts with a valid token
-///   * `rest` contains the the rest of the string after the parsed token
-///   * `token` contains the parsed [`Token`]
-/// * [`Err(error)`] if unable to parse a token
-///   * `error` contains the [`Error`]
+/// * [`Ok`]
+///   * the `input` starts with a valid token, contains the unparsed rest of
+///     the string after the parsed token and the parsed [`Token`]
+/// * [`Err`]
+///   * unable to parse a token, contains the [`Error`]
 ///
 pub fn next_token(input: &str) -> eyre::Result<(&str, Token, usize)> {
     // ignore whitespace, treat whitespace as empty
     let trimmed = input.trim_start_matches(|ch: char| ch.is_ascii_whitespace());
     if trimmed.is_empty() {
-        eyre::bail!(Error::Empty);
+        eyre::bail!("the given program was empty");
     }
 
     let tirmlen = input.len() - trimmed.len();
@@ -223,7 +222,6 @@ pub fn next_token(input: &str) -> eyre::Result<(&str, Token, usize)> {
         tag("/"),
     );
 
-    // i don't want to talk about it
     let mut slice = delimited(
         tag("|"),
         separated_pair(
@@ -326,7 +324,10 @@ pub fn next_token(input: &str) -> eyre::Result<(&str, Token, usize)> {
     let slice_res: NestedDouble = slice(trimmed);
     if let Ok((rest, (first, second))) = slice_res {
         let parser = |(sign, num): (Option<&str>, &str)| {
-            (sign.is_some(), num.parse().expect("combinator must fail"))
+            (
+                sign.is_some(),
+                num.parse().expect("combinator must not fail"),
+            )
         };
 
         let counter =
@@ -345,7 +346,7 @@ pub fn next_token(input: &str) -> eyre::Result<(&str, Token, usize)> {
         ));
     }
 
-    eyre::bail!(Error::Unknown(input.to_owned()));
+    eyre::bail!(format!("unknown token at '{}'", input));
 }
 
 #[cfg(test)]

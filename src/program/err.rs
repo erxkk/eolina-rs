@@ -7,15 +7,9 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     ///
-    /// An error occured during parsing.
+    /// A relative range resulted in an invalid target slice range.
     ///
-    #[error("parse error")]
-    Parse(#[from] crate::parse::Error),
-
-    ///
-    /// An error occured during parsing.
-    ///
-    #[error("parse error")]
+    #[error("range error")]
     Range(#[from] crate::helper::RangeError),
 
     ///
@@ -27,14 +21,14 @@ pub enum Error {
     ///
     /// Two values were not of the same type.
     ///
-    #[error("type mismatch: '{0}' != '{1}'")]
+    #[error("type mismatch: <{0}> != <{1}>")]
     Mismatch(Kind, Kind),
 
     ///
-    /// The queue was empty.
+    /// The queue was shorter than expected.
     ///
-    #[error("no value found on queue")]
-    QueueEmpty,
+    #[error("expected at least {0} value(s) on the queue, found {1}")]
+    QueueTooShort(usize, usize),
 }
 
 #[derive(thiserror::Error, Debug)]

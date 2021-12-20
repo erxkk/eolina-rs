@@ -1,4 +1,5 @@
 mod err;
+pub use self::err::ArgMismatchError;
 pub use self::err::Error;
 
 mod func;

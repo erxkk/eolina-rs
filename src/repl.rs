@@ -1,30 +1,23 @@
-use super::Error;
 use crate::{
-    helper,
-    io::Io,
-    io::Kind,
+    cli,
     parse::EagerGen,
     program::{Context as ProgramContext, Value},
 };
-use std::{collections::VecDeque, ops::Generator, pin::Pin};
+use std::{collections::VecDeque, io::Write, ops::Generator, pin::Pin};
 
 ///
 /// A repl context, used for interactively executing programs.
 ///
-pub struct Context<'a> {
-    io: &'a mut Io,
-    exec_io: &'a mut Io,
+pub struct Context {
     values: VecDeque<Value>,
 }
 
-impl<'a> Context<'a> {
+impl Context {
     ///
     /// Creates a new [`Context`] with the given [`Io`] instances.
     ///
-    pub fn new(io: &'a mut Io, exec_io: &'a mut Io) -> Self {
+    pub fn new() -> Self {
         Self {
-            io,
-            exec_io,
             values: VecDeque::new(),
         }
     }
@@ -43,7 +36,10 @@ impl<'a> Context<'a> {
     ///
     pub fn run(&mut self) -> eyre::Result<()> {
         'outer: loop {
-            let mut input = self.io.read_expect(">>> ");
+            print!(">>> ");
+            std::io::stdout().flush()?;
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
 
             // truncate the '\n'
             if input.ends_with('\n') {
@@ -63,7 +59,7 @@ impl<'a> Context<'a> {
                         }
                     }
                     Err(err) => {
-                        self.io.write_expect(Kind::Error, None, err);
+                        log::error!("{}", err);
                     }
                 }
                 continue 'outer;
@@ -72,12 +68,12 @@ impl<'a> Context<'a> {
             let gen = match EagerGen::new(&input) {
                 Ok(gen) => gen,
                 Err(err) => {
-                    self.io.write_expect(Kind::Error, None, err);
+                    log::error!("{}", err);
                     continue 'outer;
                 }
             };
 
-            let mut program = ProgramContext::new(&input, gen, self.exec_io, &mut self.values);
+            let mut program = ProgramContext::new(&input, gen, None, &mut self.values, true);
 
             'inner: loop {
                 match Pin::new(&mut program).resume(()) {
@@ -85,7 +81,7 @@ impl<'a> Context<'a> {
                     std::ops::GeneratorState::Complete(res) => {
                         match res {
                             Ok(_) => {}
-                            Err(err) => self.io.write_expect(Kind::Error, None, err),
+                            Err(err) => log::error!("{}", err),
                         }
                         continue 'outer;
                     }
@@ -110,21 +106,52 @@ impl<'a> Context<'a> {
         match cmd {
             "help" | "h" => {
                 let commands = [
-                    "h | help     print all commands",
-                    "q | queue    display the current queue",
-                    "example      display examples",
-                    "exit         exit the program",
+                    "h | help       print all commands",
+                    "q | queue      display the current queue",
+                    "c | clear      clear the current queue",
+                    "v | v+ | v-    view/increase/decrease logging verbosity",
+                    "example        display examples",
+                    "exit           exit the program",
                 ];
 
                 for cmd in commands {
-                    self.io.write_expect(Kind::Output, None, cmd);
+                    println!("{}", cmd);
                 }
 
                 Ok(false)
             }
+            "v" => {
+                println!(
+                    "{}",
+                    *cli::LOG_LEVEL_FILTER.lock().expect("mutext not acquired")
+                );
+
+                Ok(false)
+            }
+            "v+" | "v-" => {
+                let (before, after) = cli::log_level_after_adjust(&cmd[1..] == "+");
+
+                // we want to display the log change no matter the current or new level
+                // do not keep lock around, log filter accesses logs
+                *cli::LOG_LEVEL_FILTER.lock().expect("mutext not acquired") =
+                    log::LevelFilter::Debug;
+
+                if before == after {
+                    log::debug!("log level unchanged [{}]", before);
+                } else {
+                    log::debug!("changed log level from [{}] to [{}]", before, after);
+                }
+
+                *cli::LOG_LEVEL_FILTER.lock().expect("mutext not acquired") = after;
+
+                Ok(false)
+            }
+            "clear" | "c" => {
+                self.values.clear();
+                Ok(false)
+            }
             "queue" | "q" => {
-                self.io
-                    .write_expect(Kind::Info, "queue", helper::fmt_iter(self.values.iter()));
+                println!("queue: {:?}", self.values);
                 Ok(false)
             }
             "example" | "eg" => {
@@ -135,13 +162,13 @@ impl<'a> Context<'a> {
                 ];
 
                 for eg in examples {
-                    self.io.write_expect(Kind::Output, None, eg);
+                    println!("{}", eg);
                 }
 
                 Ok(false)
             }
             "exit" => Ok(true),
-            _ => eyre::bail!(Error::UnknownCommand(cmd.to_owned())),
+            _ => eyre::bail!(format!("unknown command: '{}'", cmd)),
         }
     }
 }

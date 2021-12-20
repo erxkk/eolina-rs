@@ -40,13 +40,6 @@ impl<'t> LazyGen<'t> {
             completed: false,
         }
     }
-
-    ///
-    /// Attempts to creates a new [`EagerGen`] from this [`LazyGen`].
-    ///
-    pub fn eager(self) -> eyre::Result<EagerGen<'t>> {
-        EagerGen::new(self.program)
-    }
 }
 
 impl<'t> Generator for LazyGen<'t> {
@@ -180,9 +173,7 @@ mod test {
 
     #[test]
     fn eager() {
-        let mut gen = LazyGen::new("<//|.|>")
-            .eager()
-            .expect("the program is valid");
+        let mut gen = EagerGen::new("<//|.|>").expect("the program is valid");
 
         let mut yields = vec![];
         for _ in 0..4 {
@@ -226,9 +217,7 @@ mod test {
 
     #[test]
     fn eager_error() {
-        LazyGen::new("<//|.")
-            .eager()
-            .expect_err("program is invalid");
+        EagerGen::new("<//|.").expect_err("program is invalid");
     }
 
     #[test]
@@ -263,9 +252,7 @@ mod test {
 
     #[test]
     fn eager_reset() {
-        let mut gen = LazyGen::new("<//|.|>")
-            .eager()
-            .expect("the program is valid");
+        let mut gen = EagerGen::new("<//|.|>").expect("the program is valid");
 
         let mut yields = vec![];
         for at in 0..7 {

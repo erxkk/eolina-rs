@@ -1,11 +1,13 @@
 use super::{func, Error, Value};
 use crate::{
-    io::{Io, Kind},
+    cli,
     parse::{Gen, Token},
 };
 use crossterm::style::Stylize;
 use std::{
     collections::VecDeque,
+    io::{self, Write},
+    mem::MaybeUninit,
     ops::{Generator, GeneratorState},
     pin::Pin,
 };
@@ -14,49 +16,122 @@ use std::{
 /// The excution context for a program.
 ///
 #[derive(Debug)]
-pub struct Context<'p, 'io, 'v, G> {
-    prev_len: usize,
+pub struct Context<'p, 'v, G> {
+    ///
+    /// The current token start byte index in `input`.
+    ///
+    token_start: usize,
+
+    ///
+    /// The current token byte length in `input`.
+    ///
+    token_len: usize,
+
+    ///
+    /// The input program.
+    ///
     input: &'p str,
-    io: &'io mut Io,
+
+    ///
+    /// The token generator.
+    ///
     gen: G,
+
+    ///
+    /// The command line args if any were passed.
+    ///
+    args: Option<Vec<String>>,
+
+    ///
+    /// The value queue to use.
+    ///
     values: &'v mut VecDeque<Value>,
+
+    ///
+    /// Whether or not this context is used in a repl.
+    ///
+    is_repl: bool,
 }
 
-impl<'p, 'io, 'v, G> Context<'p, 'io, 'v, G>
-where
-    G: Gen<'p> + Unpin,
-{
+impl<'p, 'v, G> Context<'p, 'v, G> {
     ///
     /// Creates a new [`Context`] with the given token generator and an empty queue.
     ///
-    pub fn new(input: &'p str, gen: G, io: &'io mut Io, values: &'v mut VecDeque<Value>) -> Self {
+    pub fn new(
+        input: &'p str,
+        gen: G,
+        args: Option<Vec<String>>,
+        values: &'v mut VecDeque<Value>,
+        is_repl: bool,
+    ) -> Self {
         Self {
-            prev_len: 0,
+            token_start: 0,
+            token_len: 0,
             input,
-            io,
             gen,
+            args,
             values,
+            is_repl,
         }
     }
 
     ///
-    /// Pops the front of the queue or returns an [`Error::QueueEmpty`] error.
+    /// Pops the front of the queue or returns a [`Error::QueueTooShort`] error.
     ///
     /// ### Returns
     ///
     /// * [`Ok`]
-    ///   * the queue was not empty, contains the [`Value`]
+    ///   * the queue was not empty, contains the [`Value`]s in the order they
+    ///     were popped off
     /// * [`Err`]
     ///   * the queue was empty, contains the [`Error`]
     ///
-    fn pop_queue(&mut self) -> Result<Value, Error> {
-        self.values.pop_front().ok_or(Error::QueueEmpty)
+    fn pop_queue<const N: usize>(&mut self) -> Result<[Value; N], Error> {
+        if self.values.len() < N {
+            Err(Error::QueueTooShort(N, self.values.len()))
+        } else {
+            // SAFETY:
+            // * The contained values are `MaybeUninit` and therefore cause no undefined
+            //   behaviour if not initialized
+            // * We have enough elements because we check at least N before
+            let mut ret: [MaybeUninit<Value>; N] = unsafe { MaybeUninit::uninit().assume_init() };
+
+            // All memory is on the stack and requires no special drop handling and can
+            // be left undropped without leaking memory if a panic occurs
+            for n in &mut ret {
+                n.write(self.values.pop_front().unwrap());
+            }
+
+            // std::mem::transmute as used `MaybeUninit`'s documentation does not work
+            // in const generic contexts as it sems
+
+            // SAFETY:
+            // * All values must be valid if we reached this part of the program because
+            //   we wrote exactly N elements
+            Ok(ret.map(|uninit| unsafe { uninit.assume_init() }))
+        }
     }
 
     ///
-    /// Returns a colored [`String`] indicating where the programm is curently in execution.
-    /// The [`Io`] instance will ignore this when it's `mode` is not set to
-    /// [`Mode::Colorful`](crate::io::Mode::Colorful).
+    /// Pushes the given [`Value`]s on the back of the queue in the order they're given.
+    ///
+    fn push_queue<const N: usize>(&mut self, values: [Value; N]) {
+        for value in values {
+            self.values.push_back(value);
+        }
+
+        self.log_queue();
+    }
+
+    ///
+    /// Logs the current queue as debug.
+    ///
+    fn log_queue(&self) {
+        log::debug!("[{}]: queue: {:?}", self.get_context(), self.values);
+    }
+
+    ///
+    /// Returns a [`String`] indicating where the programm is curently in execution.
     ///
     /// ### Returns
     ///
@@ -67,11 +142,15 @@ where
     /// Panics if the program is empty, which are however usually not parsed.
     ///
     fn get_context(&self) -> String {
-        let (s, r) = self.input.split_at(self.prev_len);
-        let c = &r[0..1];
-        let r = &r[1..];
+        let (s, r) = self.input.split_at(self.token_start);
+        let c = &r[0..self.token_len];
+        let r = &r[self.token_len..];
 
-        format!("{}{}{}", s, c.green(), r)
+        if *cli::IS_FANCY {
+            format!("{}{}{}", s.green(), c.cyan(), r.grey())
+        } else {
+            format!("{}'{}'{}", s, c, r)
+        }
     }
 
     ///
@@ -85,87 +164,117 @@ where
     ///   * the function was not successfully executed
     ///   * an IO operation failed
     ///
-    fn next_token(&mut self, token: Token) -> eyre::Result<()> {
+    fn exec_token(&mut self, token: Token) -> eyre::Result<()> {
         match token {
             Token::In => {
-                let mut val = self.io.read_expect(self.get_context().as_str());
+                let prompt = |this: &mut Self| -> io::Result<()> {
+                    if *cli::IS_FANCY {
+                        eprint!("[{}] [{}]: ", "inp".green(), this.get_context())
+                    } else {
+                        eprint!("[inp] [{}]: ", this.get_context())
+                    }
+                    std::io::stdout().flush()?;
+                    Ok(())
+                };
 
-                // truncate the '\n'
-                if val.ends_with('\n') {
-                    val.truncate(val.len() - 1);
-                }
+                let val = if let Some(value) = self.args.as_mut().and_then(|vec| vec.pop()) {
+                    prompt(self)?;
+                    value
+                } else {
+                    prompt(self)?;
 
-                self.values.push_back(Value::String(val));
+                    let mut input = String::new();
+                    std::io::stdin().read_line(&mut input)?;
+
+                    // truncate the '\n'
+                    if input.ends_with('\n') {
+                        input.truncate(input.len() - 1);
+                    }
+
+                    input
+                };
+
+                self.push_queue([Value::String(val)]);
             }
             Token::Out => {
-                let val = self.pop_queue()?;
-                self.io
-                    .write_expect(Kind::Output, self.get_context().as_str(), val);
+                let [val] = self.pop_queue()?;
+                if self.is_repl {
+                    if *cli::IS_FANCY {
+                        eprintln!("[{}] [{}]: {}", "out".green(), self.get_context(), val)
+                    } else {
+                        eprintln!("[out] [{}]: {}", self.get_context(), val)
+                    }
+                } else {
+                    println!("{}", val);
+                }
             }
             Token::Rotate(num) => {
                 self.values.rotate_left(num);
+                self.log_queue();
             }
             Token::Split(split) => {
-                let val = self.pop_queue()?;
+                let [val] = self.pop_queue()?;
                 let ret = func::split(val, split)?;
-                self.values.push_back(ret);
+                self.push_queue([ret]);
             }
             Token::Join => {
-                let val = self.pop_queue()?;
+                let [val] = self.pop_queue()?;
                 let ret = func::join(val)?;
-                self.values.push_back(ret);
+                self.push_queue([ret]);
             }
             Token::Concat => {
-                let val1 = self.pop_queue()?;
-                let val2 = self.pop_queue()?;
+                let [val1, val2] = self.pop_queue()?;
                 let ret = func::concat(val1, val2)?;
-                self.values.push_back(ret);
+                self.push_queue([ret]);
             }
             Token::Copy => {
-                let val = self.pop_queue()?;
-                let copy = val.clone();
-                self.values.push_back(val);
-                self.values.push_back(copy);
+                let [val] = self.pop_queue()?;
+                self.push_queue([val.clone(), val]);
             }
             Token::IsVowel => {
-                let val = self.pop_queue()?;
+                let [val] = self.pop_queue()?;
                 let ret = func::is_vowel(val)?;
-                self.values.push_back(ret);
+                self.push_queue([ret]);
             }
             Token::IsConso => {
-                let val = self.pop_queue()?;
+                let [val] = self.pop_queue()?;
                 let ret = func::is_conso(val)?;
-                self.values.push_back(ret);
+                self.push_queue([ret]);
             }
             Token::IsUpper => {
-                let val = self.pop_queue()?;
+                let [val] = self.pop_queue()?;
                 let ret = func::is_upper(val)?;
-                self.values.push_back(ret);
+                self.push_queue([ret]);
             }
             Token::IsLower => {
-                let val = self.pop_queue()?;
+                let [val] = self.pop_queue()?;
                 let ret = func::is_lower(val)?;
-                self.values.push_back(ret);
+                self.push_queue([ret]);
             }
             Token::Map(map) => {
-                let val = self.pop_queue()?;
+                let [val] = self.pop_queue()?;
                 let ret = func::map(val, map)?;
-                self.values.push_back(ret);
+                self.push_queue([ret]);
             }
             Token::Filter(filter) => {
-                let val = self.pop_queue()?;
+                let [val] = self.pop_queue()?;
                 let ret = func::filter(val, filter)?;
-                self.values.push_back(ret);
+                self.push_queue([ret]);
             }
             Token::Slice(range) => {
-                let val = self.pop_queue()?;
+                let [val] = self.pop_queue()?;
                 let ret = func::slice(val, range)?;
-                self.values.push_back(ret);
+                self.push_queue([ret]);
             }
         }
         Ok(())
     }
+}
 
+impl<'p, 'v, G> Context<'p, 'v, G>
+where
+    G: Gen<'p> + Unpin,
+{
     ///
     /// Consumes this [`Context`] and attempts executed it to completion.
     ///
@@ -186,7 +295,7 @@ where
     }
 }
 
-impl<'p, 'io, 'v, G> Generator for Context<'p, 'io, 'v, G>
+impl<'p, 'v, G> Generator for Context<'p, 'v, G>
 where
     G: Gen<'p> + Unpin,
 {
@@ -210,13 +319,17 @@ where
         let this = Pin::into_inner(self);
 
         match Pin::new(&mut this.gen).resume(()) {
-            GeneratorState::Yielded((token, pos)) => match this.next_token(token) {
-                Ok(()) => {
-                    this.prev_len += pos;
-                    GeneratorState::Yielded(())
+            GeneratorState::Yielded((token, len)) => {
+                this.token_len = len;
+
+                let res = this.exec_token(token);
+                this.token_start += len;
+
+                match res {
+                    Ok(()) => GeneratorState::Yielded(()),
+                    Err(inner) => GeneratorState::Complete(Err(inner)),
                 }
-                Err(inner) => GeneratorState::Complete(Err(inner)),
-            },
+            }
             GeneratorState::Complete(inner) => GeneratorState::Complete(inner),
         }
     }

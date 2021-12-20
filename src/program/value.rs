@@ -1,4 +1,4 @@
-use std::fmt::{self, Debug, Display, Formatter};
+use std::fmt::{self, Debug, Display, Formatter, Write};
 
 ///
 /// The kind of a [`Value`].
@@ -34,7 +34,7 @@ impl Display for Kind {
 ///
 /// A value accepted or returned by a function.
 ///
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub enum Value {
     ///
     /// A [`String`].
@@ -65,12 +65,34 @@ impl Value {
     }
 }
 
-impl Display for Value {
+impl Debug for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             // use debug version to show explicit delimiters
             Self::String(inner) => Debug::fmt(inner, f),
             Self::StringVec(inner) => Debug::fmt(inner, f),
+            Self::Bool(inner) => Debug::fmt(inner, f),
+        }
+    }
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            // use debug version to show explicit delimiters
+            Self::String(inner) => Display::fmt(inner, f),
+            Self::StringVec(inner) => {
+                let mut iter = inner.iter();
+                if let Some(first) = iter.next() {
+                    writeln!(f, "{}", first)?;
+                    for string in iter {
+                        f.write_char(' ')?;
+                        write!(f, "{}", string)?;
+                    }
+                }
+
+                Ok(())
+            }
             Self::Bool(inner) => Display::fmt(inner, f),
         }
     }
