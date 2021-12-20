@@ -98,17 +98,14 @@ impl<'p, 'v, G> Context<'p, 'v, G> {
 
             // All memory is on the stack and requires no special drop handling and can
             // be left undropped without leaking memory if a panic occurs
-            for n in &mut ret {
+            for n in &mut ret[..] {
                 n.write(self.values.pop_front().unwrap());
             }
-
-            // std::mem::transmute as used `MaybeUninit`'s documentation does not work
-            // in const generic contexts as it sems
 
             // SAFETY:
             // * All values must be valid if we reached this part of the program because
             //   we wrote exactly N elements
-            Ok(ret.map(|uninit| unsafe { uninit.assume_init() }))
+            Ok(unsafe { MaybeUninit::array_assume_init(ret) })
         }
     }
 

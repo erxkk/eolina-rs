@@ -1,4 +1,10 @@
-#![feature(derive_default_enum, generator_trait, iter_intersperse, once_cell)]
+#![feature(
+    derive_default_enum,
+    generator_trait,
+    iter_intersperse,
+    maybe_uninit_array_assume_init,
+    once_cell
+)]
 
 mod cli;
 mod helper;
