@@ -173,7 +173,7 @@ impl<'p, 'v, G> Context<'p, 'v, G> {
                     } else {
                         eprint!("[inp] [{}]: ", this.get_context())
                     }
-                    std::io::stdout().flush()?;
+                    io::stdout().flush()?;
                     Ok(())
                 };
 
@@ -184,7 +184,7 @@ impl<'p, 'v, G> Context<'p, 'v, G> {
                     prompt(self)?;
 
                     let mut input = String::new();
-                    std::io::stdin().read_line(&mut input)?;
+                    io::stdin().read_line(&mut input)?;
 
                     // truncate the '\n'
                     if input.ends_with('\n') {

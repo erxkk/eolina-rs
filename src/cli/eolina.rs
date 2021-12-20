@@ -1,6 +1,12 @@
 use crate::{parse::LazyGen, program, repl};
 use clap::{ArgEnum, IntoApp, Parser, Subcommand};
-use std::{collections::VecDeque, fmt::Display, fs, io::Read, str::FromStr};
+use std::{
+    collections::VecDeque,
+    fmt::Display,
+    fs,
+    io::{self, Read},
+    str::FromStr,
+};
 
 ///
 /// An exit code for handling errors that should not be bubbled up
@@ -204,7 +210,7 @@ impl Eolina {
             .filter(|meta| {
                 meta.level() <= *super::LOG_LEVEL_FILTER.lock().expect("mutex not acquired")
             })
-            .chain(std::io::stderr())
+            .chain(io::stderr())
             .apply()?;
 
         match self.subcommand {
@@ -252,7 +258,7 @@ fn cmd_eval(program: String, mut inputs: Vec<String>) -> eyre::Result<ExitCode> 
             }
             Err(err) => {
                 // failed beacuse of any other error than file not found
-                if err.kind() != std::io::ErrorKind::NotFound {
+                if err.kind() != io::ErrorKind::NotFound {
                     eyre::bail!(err);
                 }
 
@@ -262,10 +268,9 @@ fn cmd_eval(program: String, mut inputs: Vec<String>) -> eyre::Result<ExitCode> 
         }
     };
 
-    // TODO: in place reverse with swap
     if !inputs.is_empty() {
         // reverse because they are poped back to front
-        inputs = inputs.into_iter().rev().collect();
+        inputs.reverse();
     }
 
     // create an executor context

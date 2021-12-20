@@ -3,7 +3,12 @@ use crate::{
     parse::EagerGen,
     program::{Context as ProgramContext, Value},
 };
-use std::{collections::VecDeque, io::Write, ops::Generator, pin::Pin};
+use std::{
+    collections::VecDeque,
+    io::{self, Write},
+    ops::Generator,
+    pin::Pin,
+};
 
 ///
 /// A repl context, used for interactively executing programs.
@@ -37,9 +42,9 @@ impl Context {
     pub fn run(&mut self) -> eyre::Result<()> {
         'outer: loop {
             print!(">>> ");
-            std::io::stdout().flush()?;
+            io::stdout().flush()?;
             let mut input = String::new();
-            std::io::stdin().read_line(&mut input)?;
+            io::stdin().read_line(&mut input)?;
 
             // truncate the '\n'
             if input.ends_with('\n') {
