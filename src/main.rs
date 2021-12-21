@@ -13,7 +13,7 @@ mod program;
 mod repl;
 
 use clap::Parser;
-use cli::ExitCode;
+use cli::{Eolina, ExitCode};
 
 fn main() -> color_eyre::Result<()> {
     // TODO: post v1: program analysis and fancy parsing error reporting via miette
@@ -21,11 +21,11 @@ fn main() -> color_eyre::Result<()> {
 
     color_eyre::install()?;
 
-    match cli::Eolina::parse().run()? {
+    match Eolina::parse().run()? {
         ExitCode::Ok => Ok(()),
-        exit_code => {
+        err_exit_code => {
             // exiting here is fine, all non primitive values have been dropped
-            std::process::exit(exit_code as i32)
+            std::process::exit(err_exit_code as i32)
         }
     }
 }

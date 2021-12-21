@@ -178,6 +178,7 @@ impl Context {
                     "    ^    1:1       check all ascii upper",
                     "Transforms:",
                     "    .    1:1       join array elements to string",
+                    "  /x/    1:1       splits string by literal or into chars if x not given",
                     "|x.y|    1:1       slices by abs or rel indecies",
                     "  |x|    1:1       indexes by abs or rel index",
                     "  [x]    1:1       filter all by x: Checks",
