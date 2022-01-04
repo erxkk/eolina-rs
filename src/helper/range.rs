@@ -166,10 +166,10 @@ impl EolinaRange {
     ///
     /// Creates a new [`EolinaIndex`] from the given bounds.
     ///
-    pub fn components(start: Option<(bool, usize)>, end: Option<(bool, usize)>) -> Self {
+    pub fn new(start: Option<isize>, end: Option<isize>) -> Self {
         Self {
-            start: start.map(|(rel, num)| EolinaIndex::from_components(rel, num)),
-            end: end.map(|(rel, num)| EolinaIndex::from_components(rel, num)),
+            start: start.map(|num| EolinaIndex::from(num)),
+            end: end.map(|num| EolinaIndex::from(num)),
         }
     }
 

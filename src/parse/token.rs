@@ -1,186 +1,190 @@
-use crate::helper::{EolinaIndex, EolinaRange};
+use crate::{
+    helper::{self, nom::OneOf2, EolinaRange},
+    token::{Inline, Map, Predicate, Program, Repeat, RepeatKind, Token, Transform},
+};
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take_till},
-    character::complete::{digit0, digit1},
+    bytes::complete::tag,
+    character::complete::digit0,
     combinator::opt,
-    error::Error as NomError,
-    sequence::{delimited, pair, separated_pair},
-    Err as NomErr,
+    error::{Error as NomError, ErrorKind},
+    sequence::{delimited, pair, preceded, separated_pair},
+    Err as NomErr, IResult,
 };
-use std::fmt::{self, Display, Formatter};
 
-///
-/// A filter or map token, a token between `[` and `]`.
-///
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Check {
-    ///
-    /// The vowel filter `v`.
-    ///
-    Vowel,
+fn repeat(input: &str) -> IResult<&str, Token<'_>> {
+    let (rest, (token, count)) = pair(
+        alt((tag("<"), tag(">"), tag("~"), tag("*"), tag("@"))),
+        digit0,
+    )(input)?;
 
-    ///
-    /// The vowel filter `c`.
-    ///
-    Conso,
-
-    ///
-    /// The lowercase filter `_`.
-    ///
-    Lower,
-
-    ///
-    /// The uppercase filter `^`.
-    ///
-    Upper,
-}
-
-impl Display for Check {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Vowel => f.write_str("[v]"),
-            Self::Conso => f.write_str("[c]"),
-            Self::Lower => f.write_str("[_]"),
-            Self::Upper => f.write_str("[^]"),
-        }
-    }
-}
-
-///
-/// A filter or map token, a token between `{` and `}`.
-///
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Map {
-    ///
-    /// The lowercase map `_`.
-    ///
-    Lower,
-
-    ///
-    /// The uppercase map `^`.
-    ///
-    Upper,
-
-    ///
-    /// The swap case map `%`.
-    ///
-    Swap,
-}
-
-impl Display for Map {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Lower => f.write_str("{_}"),
-            Self::Upper => f.write_str("{^}"),
-            Self::Swap => f.write_str("{%}"),
-        }
-    }
-}
-
-///
-/// A function token.
-///
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Token<'p> {
-    ///
-    /// The input token `<`.
-    ///
-    In,
-
-    ///
-    /// The output token `>`.
-    ///
-    Out,
-
-    ///
-    /// The split token `/x/` where `x` is empty or a [`str`].
-    ///
-    Split(Option<&'p str>),
-
-    ///
-    /// The join token `.`.
-    ///
-    Join,
-
-    ///
-    /// The concatenation token `~`.
-    ///
-    Concat,
-
-    ///
-    /// The copy token `*`.
-    ///
-    Copy,
-
-    ///
-    /// The vowel check token `v`.
-    ///
-    IsVowel,
-
-    ///
-    /// The consonant check token `c`.
-    ///
-    IsConso,
-
-    ///
-    /// The lowercase tcheck oken `_`.
-    ///
-    IsLower,
-
-    ///
-    /// The uppercase check token `^`.
-    ///
-    IsUpper,
-
-    ///
-    /// The rotate token `@x` where `x` is empty or [`usize`].
-    ///
-    Rotate(usize),
-
-    ///
-    /// A check token `{x}` where `x` is a [`Map`] token.
-    ///
-    Map(Map),
-
-    ///
-    /// The filter token `[x]` where `x` is a [`Check`] token.
-    ///
-    Filter(Check),
-
-    ///
-    /// The index token `|x|` where `x` is a [`isize`].
-    ///
-    Index(EolinaIndex),
-
-    ///
-    /// The slice token `|x.x|` where `x` are empty or [`isize`].
-    ///
-    Slice(EolinaRange),
-}
-
-impl<'p> Display for Token<'p> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::In => f.write_str("<"),
-            Self::Out => f.write_str(">"),
-            Self::Split(split) => match split {
-                Some(string) => write!(f, "/{:?}/", string),
-                None => f.write_str("//"),
+    Ok((
+        rest,
+        Token::Repeat(Repeat::new(
+            match token {
+                "<" => RepeatKind::In,
+                ">" => RepeatKind::Out,
+                "~" => RepeatKind::Concat,
+                "*" => RepeatKind::Duplicate,
+                "@" => RepeatKind::Rotate,
+                _ => unreachable!(),
             },
-            Self::Join => f.write_str("."),
-            Self::Concat => f.write_str("~"),
-            Self::Copy => f.write_str("*"),
-            Self::IsVowel => f.write_str("v"),
-            Self::IsConso => f.write_str("c"),
-            Self::Rotate(num) => write!(f, "@{}", num),
-            Self::IsUpper => f.write_str("^"),
-            Self::IsLower => f.write_str("_"),
-            Self::Map(map) => map.fmt(f),
-            Self::Filter(filter) => filter.fmt(f),
-            Self::Index(idx) => write!(f, "|{}|", idx),
-            Self::Slice(range) => range.fmt(f),
+            {
+                let parsed = count.parse().unwrap_or(1);
+                if parsed == 0 {
+                    1
+                } else {
+                    parsed
+                }
+            },
+        )),
+    ))
+}
+
+fn inline(input: &str) -> IResult<&str, Token<'_>> {
+    let inner = |input| {
+        let mut rest = input;
+        loop {
+            match try_next_token(rest) {
+                Ok((rem, _)) => {
+                    let trimmed = rem.trim_matches(|ch: char| ch.is_ascii_whitespace());
+
+                    if let Some(trimed_rem) = trimmed.strip_prefix('}') {
+                        break Ok((rem, &input[..input.len() - trimed_rem.len() - 1]));
+                    } else {
+                        rest = rem;
+                    }
+                }
+                // the error kind given here is not used
+                Err(unknown) => break Err(NomErr::Error(NomError::new(unknown, ErrorKind::Alpha))),
+            };
         }
+    };
+
+    let (rest, tokens) = delimited(tag("{"), inner, tag("}"))(input)?;
+
+    Ok((rest, Token::Inline(Inline::Program(Program::new(tokens)))))
+}
+
+// TODO: implement blocks where applicable
+// block: predicate, join, split
+fn transform_predicate(input: &str) -> IResult<&str, Token<'_>> {
+    let (rest, predicate) = helper::nom::one_of_2(
+        preceded(tag("p"), delimited(tag("["), helper::nom::str, tag("]"))),
+        alt((tag("v"), tag("c"), tag("_"), tag("^"))),
+    )(input)?;
+
+    Ok((
+        rest,
+        match predicate {
+            OneOf2::A(string) => Token::Transform(Transform::Predicate(Predicate::Contains(
+                Inline::StringLiteral(string),
+            ))),
+            OneOf2::B("v") => Token::Transform(Transform::Predicate(Predicate::Vowel)),
+            OneOf2::B("c") => Token::Transform(Transform::Predicate(Predicate::Conso)),
+            OneOf2::B("_") => Token::Transform(Transform::Predicate(Predicate::Lower)),
+            OneOf2::B("^") => Token::Transform(Transform::Predicate(Predicate::Upper)),
+            _ => unreachable!(),
+        },
+    ))
+}
+
+fn transform_filter(input: &str) -> IResult<&str, Token<'_>> {
+    let (rest, (_, filter)) =
+        pair(tag("f"), delimited(tag("["), transform_predicate, tag("]")))(input)?;
+
+    Ok((
+        rest,
+        Token::Transform(match filter {
+            Token::Transform(Transform::Predicate(pred)) => Transform::Filter(pred),
+            _ => unreachable!(),
+        }),
+    ))
+}
+
+fn transform_map(input: &str) -> IResult<&str, Token<'_>> {
+    let (rest, (_, map)) = pair(
+        tag("m"),
+        delimited(tag("["), alt((tag("_"), tag("^"), tag("%"))), tag("]")),
+    )(input)?;
+
+    Ok((
+        rest,
+        match map {
+            "_" => Token::Transform(Transform::Map(Map::Lower)),
+            "^" => Token::Transform(Transform::Map(Map::Upper)),
+            "%" => Token::Transform(Transform::Map(Map::Swap)),
+            _ => unreachable!(),
+        },
+    ))
+}
+
+fn transform_join(input: &str) -> IResult<&str, Token<'_>> {
+    let (rest, (_, join)) = pair(
+        tag("."),
+        opt(delimited(tag("["), helper::nom::str, tag("]"))),
+    )(input)?;
+
+    Ok((
+        rest,
+        Token::Transform(Transform::Join(
+            join.map(|join| Inline::StringLiteral(join)),
+        )),
+    ))
+}
+
+fn transform_split(input: &str) -> IResult<&str, Token<'_>> {
+    let (rest, (_, split)) = pair(
+        tag("/"),
+        opt(delimited(tag("["), helper::nom::str, tag("]"))),
+    )(input)?;
+
+    Ok((
+        rest,
+        Token::Transform(Transform::Split(
+            split.map(|split| Inline::StringLiteral(split)),
+        )),
+    ))
+}
+
+fn transform(input: &str) -> IResult<&str, Token<'_>> {
+    alt((
+        transform_predicate,
+        transform_filter,
+        transform_map,
+        transform_join,
+        transform_split,
+    ))(input)
+}
+
+fn index(input: &str) -> IResult<&str, Token<'_>> {
+    let (rest, num) = delimited(tag("|"), helper::nom::isize, tag("|"))(input)?;
+
+    Ok((rest, Token::Index(num.parse::<isize>().unwrap().into())))
+}
+
+fn slice(input: &str) -> IResult<&str, Token<'_>> {
+    let (rest, (start, end)) = delimited(
+        tag("|"),
+        separated_pair(opt(helper::nom::isize), tag("."), opt(helper::nom::isize)),
+        tag("|"),
+    )(input)?;
+
+    Ok((
+        rest,
+        Token::Slice(EolinaRange::new(
+            start.and_then(|str: &str| str.parse::<isize>().ok()),
+            end.and_then(|str: &str| str.parse::<isize>().ok()),
+        )),
+    ))
+}
+
+fn try_next_token(input: &str) -> Result<(&str, Token<'_>), &str> {
+    let res = alt((repeat, inline, transform, slice, index))(input);
+    if let Ok((rest, token)) = res {
+        Ok((rest, token))
+    } else {
+        Err(input)
     }
 }
 
@@ -195,242 +199,96 @@ impl<'p> Display for Token<'p> {
 /// * [`Err`]
 ///   * unable to parse a token, contains the [`Error`]
 ///
-pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token, usize)> {
-    // ignore whitespace, treat whitespace as empty
+pub fn next_token(input: &str) -> color_eyre::Result<(&str, Token<'_>)> {
+    // ignore leading whitespace
     let trimmed = input.trim_start_matches(|ch: char| ch.is_ascii_whitespace());
+
     if trimmed.is_empty() {
         color_eyre::eyre::bail!("the given program was empty");
     }
 
-    let tirmlen = input.len() - trimmed.len();
-
-    let single = (
-        tag("<"),
-        tag(">"),
-        tag("."),
-        tag("~"),
-        tag("*"),
-        tag("v"),
-        tag("c"),
-        tag("_"),
-        tag("^"),
-    );
-
-    let double = (pair(tag("@"), digit0),);
-
-    let mut split = delimited(
-        tag("/"),
-        opt(delimited(
-            tag("\""),
-            take_till(|ch| matches!(ch, '"' | '/')),
-            tag("\""),
-        )),
-        tag("/"),
-    );
-
-    let mut index = delimited(tag("|"), pair(opt(tag("-")), digit1), tag("|"));
-
-    let mut slice = delimited(
-        tag("|"),
-        separated_pair(
-            opt(pair(opt(tag("-")), digit1)),
-            tag("."),
-            opt(pair(opt(tag("-")), digit1)),
-        ),
-        tag("|"),
-    );
-
-    let mut filter = delimited(
-        tag("["),
-        alt((tag("v"), tag("c"), tag("_"), tag("^"))),
-        tag("]"),
-    );
-
-    let mut map = delimited(tag("{"), alt((tag("_"), tag("^"), tag("%"))), tag("}"));
-
-    type Str<'a> = Result<(&'a str, &'a str), NomErr<NomError<&'a str>>>;
-    type Opt<'a> = Result<(&'a str, Option<&'a str>), NomErr<NomError<&'a str>>>;
-    type OptStr<'a> = Result<(&'a str, (Option<&'a str>, &'a str)), NomErr<NomError<&'a str>>>;
-    type StrStr<'a> = Result<(&'a str, (&'a str, &'a str)), NomErr<NomError<&'a str>>>;
-
-    // this can surely be done better
-    type OptOpt<'a> = Result<
-        (
-            &'a str,
-            (
-                Option<(Option<&'a str>, &'a str)>,
-                Option<(Option<&'a str>, &'a str)>,
-            ),
-        ),
-        NomErr<NomError<&'a str>>,
-    >;
-
-    let single_res: Str = alt(single)(trimmed);
-    if let Ok((rest, parsed)) = single_res {
-        return Ok((
-            rest,
-            match parsed {
-                "<" => Token::In,
-                ">" => Token::Out,
-                "." => Token::Join,
-                "~" => Token::Concat,
-                "*" => Token::Copy,
-                "v" => Token::IsVowel,
-                "c" => Token::IsConso,
-                "_" => Token::IsLower,
-                "^" => Token::IsUpper,
-                _ => unimplemented!("missing single branches"),
-            },
-            tirmlen + 1,
-        ));
+    if let Ok((rest, token)) = try_next_token(trimmed) {
+        // we trimmed whitepace, but want to count towards the length of this token
+        Ok((rest, token))
+    } else {
+        color_eyre::eyre::bail!(format!("unknown token at '{}'", trimmed));
     }
-
-    let double_res: StrStr = alt(double)(trimmed);
-    if let Ok((rest, (_, second))) = double_res {
-        return Ok((
-            rest,
-            Token::Rotate(second.parse().unwrap_or(1)),
-            tirmlen + 1 + second.len(),
-        ));
-    }
-
-    let index_res: OptStr = index(trimmed);
-    if let Ok((rest, (sign, num))) = index_res {
-        return Ok((
-            rest,
-            Token::Index(EolinaIndex::from_components(
-                sign.is_some(),
-                num.parse().expect("combinator must not fail"),
-            )),
-            tirmlen + 2 + num.len(),
-        ));
-    }
-
-    let split_res: Opt = split(trimmed);
-    if let Ok((rest, optional)) = split_res {
-        return Ok((
-            rest,
-            Token::Split(optional),
-            tirmlen + optional.map(|str| str.len() + 4).unwrap_or(2),
-        ));
-    }
-
-    let map_res: Str = map(trimmed);
-    if let Ok((rest, parsed)) = map_res {
-        return Ok((
-            rest,
-            match parsed {
-                "_" => Token::Map(Map::Lower),
-                "^" => Token::Map(Map::Upper),
-                "%" => Token::Map(Map::Swap),
-                _ => unimplemented!("missing map branches"),
-            },
-            tirmlen + 3,
-        ));
-    }
-
-    let filter_res: Str = filter(trimmed);
-    if let Ok((rest, parsed)) = filter_res {
-        return Ok((
-            rest,
-            match parsed {
-                "v" => Token::Filter(Check::Vowel),
-                "c" => Token::Filter(Check::Conso),
-                "_" => Token::Filter(Check::Lower),
-                "^" => Token::Filter(Check::Upper),
-                _ => unimplemented!("missing filter branches"),
-            },
-            tirmlen + 3,
-        ));
-    }
-
-    let slice_res: OptOpt = slice(trimmed);
-    if let Ok((rest, (first, second))) = slice_res {
-        let parser = |(sign, num): (Option<&str>, &str)| {
-            (
-                sign.is_some(),
-                num.parse().expect("combinator must not fail"),
-            )
-        };
-
-        let counter =
-            |(sign, num): (Option<&str>, &str)| num.len() + if sign.is_some() { 1 } else { 0 };
-
-        return Ok((
-            rest,
-            Token::Slice(EolinaRange::components(
-                first.map(parser),
-                second.map(parser),
-            )),
-            tirmlen
-                + 3
-                + first.map(counter).unwrap_or_default()
-                + second.map(counter).unwrap_or_default(),
-        ));
-    }
-
-    color_eyre::eyre::bail!(format!("unknown token at '{}'", input));
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::borrow::Cow;
 
     #[test]
-    fn single() {
-        assert_eq!(next_token("<").unwrap(), ("", Token::In, 1));
-        assert_eq!(next_token(">").unwrap(), ("", Token::Out, 1));
-        assert_eq!(next_token(".").unwrap(), ("", Token::Join, 1));
-        assert_eq!(next_token("v").unwrap(), ("", Token::IsVowel, 1));
-        assert_eq!(next_token("c").unwrap(), ("", Token::IsConso, 1));
-        assert_eq!(next_token("_").unwrap(), ("", Token::IsLower, 1));
-        assert_eq!(next_token("^").unwrap(), ("", Token::IsUpper, 1));
-    }
-
-    #[test]
-    fn split() {
-        assert_eq!(next_token("//").unwrap(), ("", Token::Split(None), 2));
+    fn inline() {
         assert_eq!(
-            next_token("/\"\"/").unwrap(),
-            ("", Token::Split(Some("")), 4)
+            next_token("{<>}").unwrap().1,
+            Token::Inline(Inline::Program(Program::new("<>")))
         );
         assert_eq!(
-            next_token("/\"aa\"/").unwrap(),
-            ("", Token::Split(Some("aa")), 6)
+            next_token("{<>{</|.|}}").unwrap().1,
+            Token::Inline(Inline::Program(Program::new("<>{</|.|}")))
         );
     }
 
     #[test]
-    fn dobule() {
-        assert_eq!(next_token("@").unwrap(), ("", Token::Rotate(1), 1));
-        assert_eq!(next_token("@1").unwrap(), ("", Token::Rotate(1), 2));
-        assert_eq!(next_token("@3").unwrap(), ("", Token::Rotate(3), 2));
+    fn repeat() {
+        assert_eq!(
+            next_token("<").unwrap().1,
+            Token::Repeat(Repeat::new(RepeatKind::In, 1))
+        );
+        assert_eq!(
+            next_token(">2").unwrap().1,
+            Token::Repeat(Repeat::new(RepeatKind::Out, 2))
+        );
+        assert_eq!(
+            next_token("~").unwrap().1,
+            Token::Repeat(Repeat::new(RepeatKind::Concat, 1))
+        );
+        assert_eq!(
+            next_token("*2").unwrap().1,
+            Token::Repeat(Repeat::new(RepeatKind::Duplicate, 2))
+        );
+        assert_eq!(
+            next_token("@").unwrap().1,
+            Token::Repeat(Repeat::new(RepeatKind::Rotate, 1))
+        );
     }
 
     #[test]
-    fn map() {
-        assert_eq!(next_token("{_}").unwrap(), ("", Token::Map(Map::Lower), 3));
-        assert_eq!(next_token("{^}").unwrap(), ("", Token::Map(Map::Upper), 3));
-        assert_eq!(next_token("{%}").unwrap(), ("", Token::Map(Map::Swap), 3));
-    }
-
-    #[test]
-    fn filter() {
+    fn transform() {
         assert_eq!(
-            next_token("[v]").unwrap(),
-            ("", Token::Filter(Check::Vowel), 3)
+            next_token("f[^]").unwrap().1,
+            Token::Transform(Transform::Filter(Predicate::Upper))
         );
         assert_eq!(
-            next_token("[c]").unwrap(),
-            ("", Token::Filter(Check::Conso), 3)
+            next_token("m[%]").unwrap().1,
+            Token::Transform(Transform::Map(Map::Swap))
         );
         assert_eq!(
-            next_token("[_]").unwrap(),
-            ("", Token::Filter(Check::Lower), 3)
+            next_token("p[\" \"]").unwrap().1,
+            Token::Transform(Transform::Predicate(Predicate::Contains(
+                Inline::StringLiteral(Cow::Borrowed(" "))
+            )))
         );
         assert_eq!(
-            next_token("[^]").unwrap(),
-            ("", Token::Filter(Check::Upper), 3)
+            next_token(".[]").unwrap().1,
+            Token::Transform(Transform::Join(None))
+        );
+        assert_eq!(
+            next_token("/[\" \"]").unwrap().1,
+            Token::Transform(Transform::Split(Some(Inline::StringLiteral(
+                Cow::Borrowed(" ")
+            ))))
+        );
+        assert_eq!(
+            next_token(".").unwrap().1,
+            Token::Transform(Transform::Join(None))
+        );
+        assert_eq!(
+            next_token("/").unwrap().1,
+            Token::Transform(Transform::Split(None))
         );
     }
 
@@ -438,42 +296,46 @@ mod test {
     fn index() {
         assert_eq!(
             next_token("|42|").unwrap(),
-            ("", Token::Index((42isize).into()), 4)
+            ("", Token::Index((42isize).into()))
         );
         assert_eq!(
             next_token("|-42|").unwrap(),
-            ("", Token::Index((-42isize).into()), 4)
+            ("", Token::Index((-42isize).into()))
         );
     }
 
     #[test]
     fn slice() {
-        assert_eq!(
-            next_token("|.|").unwrap(),
-            ("", Token::Slice((..).into()), 3)
-        );
+        assert_eq!(next_token("|.|").unwrap(), ("", Token::Slice((..).into())));
         assert_eq!(
             next_token("|.42|").unwrap(),
-            ("", Token::Slice((..42usize).into()), 5)
+            ("", Token::Slice((..42usize).into()))
         );
         assert_eq!(
             next_token("|-42.|").unwrap(),
-            ("", Token::Slice((-42isize..).into()), 6)
+            ("", Token::Slice((-42isize..).into()))
         );
         assert_eq!(
             next_token("|42.-42|").unwrap(),
-            ("", Token::Slice((42..-42isize).into()), 8)
+            ("", Token::Slice((42..-42isize).into()))
         );
     }
 
     #[test]
     fn repeating() {
-        assert_eq!(next_token("<>//|.|").unwrap(), (">//|.|", Token::In, 1));
-        assert_eq!(next_token(">//|.|").unwrap(), ("//|.|", Token::Out, 1));
-        assert_eq!(next_token("//|.|").unwrap(), ("|.|", Token::Split(None), 2));
+        let mut res = next_token("</|.|>").unwrap();
         assert_eq!(
-            next_token("|.|").unwrap(),
-            ("", Token::Slice((..).into()), 3)
+            res,
+            ("/|.|>", Token::Repeat(Repeat::new(RepeatKind::In, 1)))
         );
+
+        res = next_token(res.0).unwrap();
+        assert_eq!(res, ("|.|>", Token::Transform(Transform::Split(None))));
+
+        res = next_token(res.0).unwrap();
+        assert_eq!(res, (">", Token::Slice((..).into())));
+
+        res = next_token(res.0).unwrap();
+        assert_eq!(res, ("", Token::Repeat(Repeat::new(RepeatKind::Out, 1))));
     }
 }

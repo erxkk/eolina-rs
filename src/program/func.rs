@@ -1,6 +1,7 @@
 use super::{ArgMismatchError, Error, Kind, Value};
 use crate::helper::{AsciiExt, EolinaIndex, EolinaRange};
-use crate::parse::{CheckToken, MapToken};
+use crate::token::Transform;
+use crate::token::{Map as MapToken, Predicate as PredicateToken};
 
 ///
 /// Splits the given input into it's [`char`]s if no `split` is given otherwise splits by `split`.
@@ -16,23 +17,24 @@ use crate::parse::{CheckToken, MapToken};
 /// * [`Err(error)`]
 ///   * `error` contains an arg type mismatch [`Error`]
 ///
-pub fn split(input: Value, split: Option<&str>) -> Result<Value, Error> {
-    let string = match input {
-        Value::String(inner) => Ok(inner),
-        x => Err(Error::ArgMismatch(ArgMismatchError::new(
-            &[Kind::String],
-            x.kind(),
-        ))),
-    }?;
+pub fn transform(input: Value, transform: Transform) -> Result<Value, Error> {
+    // let string = match input {
+    //     Value::String(inner) => Ok(inner),
+    //     x => Err(Error::ArgMismatch(ArgMismatchError::new(
+    //         &[Kind::String],
+    //         x.kind(),
+    //     ))),
+    // }?;
 
-    Ok(Value::StringVec(match split {
-        Some(split) => string
-            .split(&split)
-            .filter(|str| !str.is_empty())
-            .map(ToOwned::to_owned)
-            .collect(),
-        None => string.chars().map(|ch| ch.to_string()).collect(),
-    }))
+    // Ok(Value::StringVec(match split {
+    //     Some(split) => string
+    //         .split(&split)
+    //         .filter(|str| !str.is_empty())
+    //         .map(ToOwned::to_owned)
+    //         .collect(),
+    //     None => string.chars().map(|ch| ch.to_string()).collect(),
+    // }))
+    todo!()
 }
 
 ///
@@ -238,17 +240,17 @@ fn __map<T: AsciiExt>(val: T, map: MapToken) -> T {
 /// * [`Err(error)`]
 ///   * `error` contains an arg type mismatch [`Error`]
 ///
-pub fn filter(input: Value, check: CheckToken) -> Result<Value, Error> {
+pub fn filter(input: Value, predicate: &PredicateToken) -> Result<Value, Error> {
     match input {
         Value::String(string) => Ok(Value::String(
             string
                 .chars()
-                .filter(|ch| __filter(ch, check))
+                .filter(|ch| __filter(ch, predicate))
                 .collect::<String>(),
         )),
         Value::StringVec(vec) => Ok(Value::StringVec(
             vec.into_iter()
-                .filter(|string| __filter(string, check))
+                .filter(|string| __filter(string, predicate))
                 .collect(),
         )),
         x => Err(Error::ArgMismatch(ArgMismatchError::new(
@@ -258,12 +260,13 @@ pub fn filter(input: Value, check: CheckToken) -> Result<Value, Error> {
     }
 }
 
-fn __filter<T: AsciiExt>(val: &T, check: CheckToken) -> bool {
-    match check {
-        CheckToken::Vowel => val.is_vowel(),
-        CheckToken::Conso => val.is_conso(),
-        CheckToken::Upper => val.is_upper(),
-        CheckToken::Lower => val.is_lower(),
+fn __filter<T: AsciiExt>(val: &T, predicate: &PredicateToken) -> bool {
+    match predicate {
+        PredicateToken::Vowel => val.is_vowel(),
+        PredicateToken::Conso => val.is_conso(),
+        PredicateToken::Upper => val.is_upper(),
+        PredicateToken::Lower => val.is_lower(),
+        PredicateToken::Contains(_inline) => todo!(),
     }
 }
 
@@ -347,23 +350,23 @@ pub fn slice(input: Value, range: EolinaRange) -> Result<Value, Error> {
 mod test {
     use super::*;
 
-    #[test]
-    fn split() {
-        assert_eq!(
-            super::split(Value::String("Abc".to_owned()), None).unwrap(),
-            Value::StringVec(vec!["A".to_owned(), "b".to_owned(), "c".to_owned()])
-        );
-        assert_eq!(
-            super::split(Value::String("Abcbdebfb".to_owned()), Some("b")).unwrap(),
-            Value::StringVec(vec![
-                "A".to_owned(),
-                "c".to_owned(),
-                "de".to_owned(),
-                "f".to_owned()
-            ])
-        );
-        assert!(super::split(Value::Bool(true), None).is_err());
-    }
+    // #[test]
+    // fn transform() {
+    //     assert_eq!(
+    //         super::transform(Value::String("Abc".to_owned()), None).unwrap(),
+    //         Value::StringVec(vec!["A".to_owned(), "b".to_owned(), "c".to_owned()])
+    //     );
+    //     assert_eq!(
+    //         super::transform(Value::String("Abcbdebfb".to_owned()), Some("b")).unwrap(),
+    //         Value::StringVec(vec![
+    //             "A".to_owned(),
+    //             "c".to_owned(),
+    //             "de".to_owned(),
+    //             "f".to_owned()
+    //         ])
+    //     );
+    //     assert!(super::transform(Value::Bool(true), None).is_err());
+    // }
 
     #[test]
     fn join() {
@@ -452,34 +455,34 @@ mod test {
         assert!(super::map(Value::Bool(true), MapToken::Lower).is_err());
     }
 
-    #[test]
-    fn filter() {
-        assert_eq!(
-            super::filter(Value::String("abC".to_owned()), CheckToken::Vowel).unwrap(),
-            Value::String("a".to_owned())
-        );
-        assert_eq!(
-            super::filter(Value::String("aBc".to_owned()), CheckToken::Conso).unwrap(),
-            Value::String("Bc".to_owned())
-        );
-        assert_eq!(
-            super::filter(
-                Value::StringVec(vec!["ABC".to_owned(), "def".to_owned()]),
-                CheckToken::Upper
-            )
-            .unwrap(),
-            Value::StringVec(vec!["ABC".to_owned()])
-        );
-        assert_eq!(
-            super::filter(
-                Value::StringVec(vec!["abc".to_owned(), "DEF".to_owned()]),
-                CheckToken::Lower
-            )
-            .unwrap(),
-            Value::StringVec(vec!["abc".to_owned()])
-        );
-        assert!(super::filter(Value::Bool(true), CheckToken::Vowel).is_err());
-    }
+    // #[test]
+    // fn filter() {
+    //     assert_eq!(
+    //         super::filter(Value::String("abC".to_owned()), PredicateToken::Vowel).unwrap(),
+    //         Value::String("a".to_owned())
+    //     );
+    //     assert_eq!(
+    //         super::filter(Value::String("aBc".to_owned()), PredicateToken::Conso).unwrap(),
+    //         Value::String("Bc".to_owned())
+    //     );
+    //     assert_eq!(
+    //         super::filter(
+    //             Value::StringVec(vec!["ABC".to_owned(), "def".to_owned()]),
+    //             PredicateToken::Upper
+    //         )
+    //         .unwrap(),
+    //         Value::StringVec(vec!["ABC".to_owned()])
+    //     );
+    //     assert_eq!(
+    //         super::filter(
+    //             Value::StringVec(vec!["abc".to_owned(), "DEF".to_owned()]),
+    //             PredicateToken::Lower
+    //         )
+    //         .unwrap(),
+    //         Value::StringVec(vec!["abc".to_owned()])
+    //     );
+    //     assert!(super::filter(Value::Bool(true), PredicateToken::Vowel).is_err());
+    // }
 
     #[test]
     fn index_pos() {

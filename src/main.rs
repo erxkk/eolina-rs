@@ -11,6 +11,7 @@ mod helper;
 mod parse;
 mod program;
 mod repl;
+mod token;
 
 use clap::Parser;
 use cli::{Eolina, ExitCode};

@@ -1,6 +1,8 @@
 mod ascii;
 pub use ascii::AsciiExt;
 
+pub mod nom;
+
 mod range;
 pub use range::EolinaIndex;
 pub use range::EolinaRange;
